@@ -14,11 +14,12 @@ const test = base.extend({
   },
 })
 
-const internalLinks = 'a[href^="/staff"], a[href^="/doctor"], a[href^="/receptionist"]'
+const internalLinks = 'a[href^="/login"], a[href^="/staff"], a[href^="/doctor"], a[href^="/receptionist"]'
 const loginTitle = 'Đăng nhập hệ thống phòng khám'
 
 async function checkLogin(page) {
   await expect(page.getByRole('heading', { name: loginTitle })).toBeVisible()
+  await expect(page).toHaveTitle('Đăng nhập nhân viên | Clinic Management')
   await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toHaveCount(0)
   await expect(page.getByText('Dành cho nhân viên được cấp quyền.')).toBeVisible()
   await expect(page.getByText('Đăng nhập chưa khả dụng', { exact: true })).toBeVisible()
@@ -38,15 +39,33 @@ test('TC01/TC02: public navigation has patient links only', async ({ page, isMob
 })
 
 test('TC03: staff login has an independent layout', async ({ page }) => {
-  await page.goto('/staff/login')
+  await page.goto('/login')
+  await expect(page).toHaveURL(/\/login$/)
   await checkLogin(page)
+  await expect(page.locator('form')).toHaveCount(1)
   await expect(page.getByText('Clinic Management', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Tài khoản')).toHaveAttribute('autocomplete', 'username')
   await expect(page.getByLabel(/^Mật khẩu/)).toHaveAttribute('autocomplete', 'current-password')
+  await page.reload()
+  await expect(page).toHaveURL(/\/login$/)
+  await checkLogin(page)
+})
+
+test('TC15: legacy staff login redirects to /login and replaces its history entry', async ({ page }) => {
+  for (const path of ['/staff/login', '/staff/login?role=doctor&redirect=/doctor#staff-login-main']) {
+    await page.goto('/booking-notice')
+    await page.goto(path)
+    await expect(page).toHaveURL(/\/login$/)
+    await checkLogin(page)
+    await expect(page.locator('form')).toHaveCount(1)
+    await page.goBack()
+    await expect(page).toHaveURL(/\/booking-notice$/)
+    await expect(page.getByRole('heading', { name: 'Đặt lịch khám trực tuyến', exact: true })).toBeVisible()
+  }
 })
 
 test('TC04: required fields reject empty and whitespace-only values and focus the first error', async ({ page }) => {
-  await page.goto('/staff/login')
+  await page.goto('/login')
   const username = page.getByLabel('Tài khoản')
   const password = page.getByLabel(/^Mật khẩu/)
   const submit = page.getByRole('button', { name: 'Đăng nhập', exact: true })
@@ -68,7 +87,7 @@ test('TC04: required fields reject empty and whitespace-only values and focus th
 })
 
 test('TC05: password visibility toggle does not submit the form', async ({ page }) => {
-  await page.goto('/staff/login')
+  await page.goto('/login')
   const password = page.getByLabel(/^Mật khẩu/)
   await expect(page.getByRole('button', { name: 'Hiện mật khẩu' })).toBeDisabled()
   await password.fill(randomUUID())
@@ -81,7 +100,7 @@ test('TC05: password visibility toggle does not submit the form', async ({ page 
 })
 
 test('TC06/TC07: submit creates no request, storage, cookie, session or role navigation', async ({ page, context }) => {
-  await page.goto('/staff/login?role=doctor&redirect=/doctor')
+  await page.goto('/login?role=doctor&redirect=/doctor')
   const storageBefore = await context.storageState()
   const sessionBefore = await page.evaluate(() => ({ ...sessionStorage }))
   const requests = []
@@ -93,7 +112,7 @@ test('TC06/TC07: submit creates no request, storage, cookie, session or role nav
   await page.getByRole('button', { name: 'Hiện mật khẩu' }).click()
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
   await expect(page.getByRole('status')).toContainText('Chưa có phiên đăng nhập nào được tạo.')
-  await expect(page).toHaveURL(/\/staff\/login\?role=doctor&redirect=\/doctor$/)
+  await expect(page).toHaveURL(/\/login\?role=doctor&redirect=\/doctor$/)
   await expect(page.getByLabel(/^Mật khẩu/)).toHaveValue('')
   await expect(page.getByLabel(/^Mật khẩu/)).toHaveAttribute('type', 'password')
   expect(await context.storageState()).toEqual(storageBefore)
@@ -112,7 +131,7 @@ for (const [role, label, ownMenu, otherMenu] of [
   test('TC08/TC09: ' + role + ' preview is isolated and unavailable in production', async ({ page, isMobile }, testInfo) => {
     await page.goto('/' + role)
     if (testInfo.project.name.startsWith('production')) {
-      await expect(page).toHaveURL(/\/staff\/login$/)
+      await expect(page).toHaveURL(/\/login$/)
       await checkLogin(page)
       await expect(page.locator('#staff-navigation')).toHaveCount(0)
       return
@@ -142,7 +161,10 @@ for (const [role, label, ownMenu, otherMenu] of [
       await expect(opener).toBeFocused()
       await opener.click()
     }
-    await page.getByRole('link', { name: 'Về trang đăng nhập nhân viên' }).click()
+    const loginLink = page.getByRole('link', { name: 'Về trang đăng nhập nhân viên' })
+    await expect(loginLink).toHaveAttribute('href', '/login')
+    await loginLink.click()
+    await expect(page).toHaveURL(/\/login$/)
     await checkLogin(page)
   })
 }
@@ -150,7 +172,7 @@ for (const [role, label, ownMenu, otherMenu] of [
 test('TC10: all routes fit 320, 390, 768 and 1440 pixel viewports', async ({ page }, testInfo) => {
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 })
-    for (const path of ['/', '/booking-notice', '/staff/login', '/receptionist', '/doctor', '/not-a-route']) {
+    for (const path of ['/', '/booking-notice', '/login', '/receptionist', '/doctor', '/not-a-route']) {
       await page.goto(path)
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), width + 'px ' + path).toBe(true)
@@ -165,7 +187,7 @@ test('TC10: all routes fit 320, 390, 768 and 1440 pixel viewports', async ({ pag
     }
   }
   await page.setViewportSize(testInfo.project.use.viewport)
-  for (const [name, path] of [['public', '/'], ['login', '/staff/login'], ['receptionist', '/receptionist'], ['doctor', '/doctor']]) {
+  for (const [name, path] of [['public', '/'], ['login', '/login'], ['receptionist', '/receptionist'], ['doctor', '/doctor']]) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath(name + '.png'), fullPage: true })

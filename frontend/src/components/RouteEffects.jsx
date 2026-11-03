@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom'
 const titles = {
   '/': 'Thông tin dành cho bệnh nhân',
   '/booking-notice': 'Đặt lịch khám đang phát triển',
-  '/staff/login': 'Đăng nhập nhân viên',
+  '/login': 'Đăng nhập nhân viên',
   '/receptionist': 'PREVIEW ONLY · Lễ tân',
   '/doctor': 'PREVIEW ONLY · Bác sĩ',
 }

@@ -13,7 +13,7 @@ const previews = import.meta.env.DEV ? {
 } : {}
 
 function StaffPreview({ role }) {
-  if (!import.meta.env.DEV) return <Navigate to="/staff/login" replace />
+  if (!import.meta.env.DEV) return <Navigate to="/login" replace />
   const Dashboard = previews[role]
   return (
     <Suspense fallback={<p className="p-8 text-slate-600" role="status">Đang tải giao diện xem trước…</p>}>
@@ -30,7 +30,8 @@ export default function AppRoutes() {
         <Route path="/booking-notice" element={<BookingNoticePage />} />
       </Route>
 
-      <Route path="/staff/login" element={<StaffLoginPage />} />
+      <Route path="/login" element={<StaffLoginPage />} />
+      <Route path="/staff/login" element={<Navigate to="/login" replace />} />
       <Route path="/receptionist" element={<StaffPreview role="receptionist" />} />
       <Route path="/doctor" element={<StaffPreview role="doctor" />} />
       <Route path="*" element={<NotFoundPage />} />

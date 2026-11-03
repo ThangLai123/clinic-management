@@ -20,14 +20,15 @@ Trên PowerShell chặn npm.ps1, dùng `npm.cmd` thay cho `npm`.
 | --- | --- | --- |
 | / | Website bệnh nhân, PublicLayout | Công khai; nội dung dịch vụ dự kiến |
 | /booking-notice | Thông báo đặt lịch | Đang phát triển; không tiếp nhận dữ liệu |
-| /staff/login | Đăng nhập nhân viên | UI và validation client; chưa có Backend Auth |
+| /login | Đăng nhập nhân viên | UI và validation client; chưa có Backend Auth |
+| /staff/login | Tương thích đường dẫn cũ | Chỉ redirect replace sang /login |
 | /receptionist | StaffLayout và menu Lễ tân | PREVIEW ONLY trong development |
 | /doctor | StaffLayout và menu Bác sĩ | PREVIEW ONLY trong development |
 | * | Không tìm thấy trang | Trang 404 chung |
 
-Website bệnh nhân không có liên kết đến khu vực nhân viên. Nhân viên truy cập trực tiếp /staff/login.
+Website bệnh nhân không có liên kết đến khu vực nhân viên. Nhân viên truy cập trực tiếp /login. Đường dẫn cũ /staff/login chỉ chuyển hướng sang /login bằng `Navigate replace`, bỏ query/hash và không tạo trang đăng nhập thứ hai.
 
-Dashboard chỉ được import trong `import.meta.env.DEV`. Trong production, truy cập /doctor hoặc /receptionist sẽ thay thế history entry bằng /staff/login. Không có cờ query hoặc localStorage để bật preview ở production.
+Dashboard chỉ được import trong `import.meta.env.DEV`. Trong production, truy cập /doctor hoặc /receptionist sẽ thay thế history entry bằng /login. Không có cờ query hoặc localStorage để bật preview ở production.
 
 Đây là quy tắc cung cấp giao diện, không phải cơ chế bảo vệ dữ liệu. Không đưa dữ liệu thật vào frontend; Backend sau này phải xác thực và kiểm tra quyền cho mọi API nghiệp vụ.
 

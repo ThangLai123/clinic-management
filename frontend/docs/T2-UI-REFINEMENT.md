@@ -16,9 +16,10 @@ Nhân viên cần một điểm đăng nhập riêng và không gian làm việc
 | --- | --- | --- | --- |
 | `/` | PublicLayout → LandingPage | Website bệnh nhân | Website bệnh nhân |
 | `/booking-notice` | PublicLayout → BookingNoticePage | Thông báo đang phát triển | Thông báo đang phát triển |
-| `/staff/login` | StaffLoginPage độc lập | Form UI, chưa xác thực | Form UI, chưa xác thực |
-| `/receptionist` | StaffLayout → ReceptionistDashboard | PREVIEW ONLY, dữ liệu mẫu | Navigate replace → `/staff/login` |
-| `/doctor` | StaffLayout → DoctorDashboard | PREVIEW ONLY, dữ liệu mẫu | Navigate replace → `/staff/login` |
+| `/login` | StaffLoginPage độc lập | Form UI, chưa xác thực | Form UI, chưa xác thực |
+| `/staff/login` | Chỉ tương thích đường dẫn cũ | Navigate replace → `/login` | Navigate replace → `/login` |
+| `/receptionist` | StaffLayout → ReceptionistDashboard | PREVIEW ONLY, dữ liệu mẫu | Navigate replace → `/login` |
+| `/doctor` | StaffLayout → DoctorDashboard | PREVIEW ONLY, dữ liệu mẫu | Navigate replace → `/login` |
 | `*` | NotFoundPage độc lập | Trang 404 | Trang 404 |
 
 Navbar và Footer công khai chỉ phục vụ bệnh nhân. Staff Login và Staff Dashboard không dùng Navbar bệnh nhân. StaffLayout sở hữu Sidebar, TopHeader, banner preview và vùng nội dung chung; dashboard giữ menu và nội dung riêng theo vai trò.
@@ -65,7 +66,7 @@ Không sửa nội dung skill, Backend, SQL hoặc cấu hình database.
 ## D. Luồng truy cập
 
 1. Người bệnh truy cập `/`, xem Giới thiệu, Dịch vụ, Quy trình, Liên hệ và chọn Đặt lịch khám. `/booking-notice` báo tính năng đang phát triển; không có biểu mẫu thu thông tin sức khỏe hoặc lịch hẹn giả.
-2. Nhân viên truy cập trực tiếp `/staff/login`. Website công khai không có link dẫn đến cổng này hoặc dashboard.
+2. Nhân viên truy cập trực tiếp `/login`; `/staff/login` chỉ redirect replace sang `/login`, bỏ query/hash và không có trang đăng nhập riêng. Website công khai không có link dẫn đến cổng này hoặc dashboard.
 3. Trong T2, gửi form chỉ kiểm tra client và báo chưa kết nối Backend. Không có điều hướng vào dashboard.
 4. Khi phát triển, người đánh giá có thể nhập trực tiếp `/receptionist` hoặc `/doctor` để xem mẫu. Đây không phải hai lựa chọn cấp quyền hoặc hai tài khoản đang đăng nhập.
 5. Trong production, cả hai đường dẫn dashboard chuyển về staff login. Người dùng không thể dùng query role để thay đổi hành vi này.
@@ -115,11 +116,11 @@ Canvas local: http://127.0.0.1:4720/design/IPSlhVCDpn5h3PqndcqIZ2pSHKim-926/
 
 ## I. Test case và kết quả thực tế
 
-Lượt cuối: **36 PASS, 0 FAIL, 0 SKIP**, chạy bằng Chrome thật qua Playwright, trên bốn project: development-desktop, development-mobile, production-desktop, production-mobile. Mỗi project có 9 kịch bản; nhiều TC được kiểm tra trong cùng một kịch bản. Lượt cuối hoàn tất trong khoảng 50,8 giây.
+Lượt nghiệm thu UI ban đầu: **36 PASS, 0 FAIL, 0 SKIP**, chạy bằng Chrome thật qua Playwright, trên bốn project: development-desktop, development-mobile, production-desktop, production-mobile. Mỗi project có 9 kịch bản; nhiều TC được kiểm tra trong cùng một kịch bản. Lượt này hoàn tất trong khoảng 50,8 giây. Kết quả sau khi chuẩn hóa route cho Issue #3 được ghi riêng tại mục L.
 
 | TC | Nội dung đã kiểm tra | Kết quả |
 | --- | --- | --- |
-| TC01 | Landing Page, Navbar và Footer không có liên kết staff/login, receptionist hoặc doctor; giữ các mục bệnh nhân. | PASS |
+| TC01 | Landing Page, Navbar và Footer không có liên kết /login, /staff/login, receptionist hoặc doctor; giữ các mục bệnh nhân. | PASS |
 | TC02 | Mở menu mobile và kiểm tra nội dung cùng toàn bộ link nội bộ. | PASS |
 | TC03 | Truy cập trực tiếp staff login; kiểm tra tiêu đề, mô tả, form, autocomplete và layout riêng. | PASS |
 | TC04 | Rỗng, toàn khoảng trắng, lỗi mỗi trường, xóa lỗi khi sửa và focus trường lỗi đầu tiên. | PASS |
@@ -170,3 +171,48 @@ Không stage, commit, push, tạo Pull Request, đánh dấu checkbox hoặc đ�
 Task T2 đáp ứng yêu cầu tách Public Website/Staff Application, form đăng nhập UI trung thực, layout nhân viên dùng chung, không đổi quyền bằng giao diện và không cung cấp dashboard hoạt động trong production khi chưa xác thực. TC01–TC14 đã được kiểm tra thực tế theo phạm vi mô tả trên.
 
 Backend Auth, session, RBAC và dữ liệu nghiệp vụ thật thuộc các Task sau. Phần frontend đã sẵn sàng bàn giao để người dùng xem xét và nghiệm thu.
+
+## L. Issue #3 – M1.2 / T2: Chuẩn hóa route đăng nhập
+
+Ngày kiểm tra: 03/11/2026, múi giờ Asia/Saigon. Route chính `/login` render duy nhất component `StaffLoginPage` hiện có. Route cũ `/staff/login` chỉ dùng `<Navigate to="/login" replace />`, bỏ query/hash; nút Back quay lại trang trước khi mở đường dẫn cũ.
+
+Giữ nguyên đường dẫn `/receptionist`, `/doctor` và các dashboard: development vẫn xem preview, production vẫn chuyển hướng bằng `replace`, với đích mới `/login`. Không sửa `StaffLoginPage`, CSS hoặc canvas Claude Design; không triển khai Backend Auth hay phiên đăng nhập giả. Hợp đồng Backend dự kiến `/api/v1/auth/staff/login` không thuộc thay đổi URL giao diện này.
+
+Sáu tệp được sửa trong lần chuẩn hóa route (đường dẫn tương đối với `frontend/`):
+
+| Tệp | Nguyên nhân và thay đổi |
+| --- | --- |
+| `src/routes/AppRoutes.jsx` | Đăng ký `/login`, giữ URL cũ làm redirect, đổi đích chuyển hướng production của StaffPreview. |
+| `src/components/Sidebar.jsx` | Liên kết về trang đăng nhập dẫn thẳng đến `/login`. |
+| `src/components/RouteEffects.jsx` | Ánh xạ tiêu đề đăng nhập cho URL mới. |
+| `tests/e2e/t2.spec.js` | Đổi URL và kỳ vọng của test hiện có; bổ sung kiểm tra tải lại, tiêu đề, một form duy nhất, href Sidebar và redirect replace của URL cũ. Bộ lọc liên kết nội bộ bao gồm `/login`. |
+| `README.md` | Cập nhật bảng route, hướng dẫn truy cập và hành vi tương thích URL cũ. |
+| `docs/T2-UI-REFINEMENT.md` | Đồng bộ mô tả route và ghi kết quả kiểm tra lần này. |
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `npm.cmd run lint` | PASS, exit code 0. |
+| `npm.cmd run build` qua lifecycle `pretest:e2e` | PASS, exit code 0; 35 modules, tạo bản production mới trước test. |
+| `npm.cmd run test:e2e` | PASS, exit code 0; 40 PASS, 0 FAIL, 0 SKIP, 0 FLAKY; không có lỗi tổng thể. |
+| `git diff --check` | PASS, exit code 0; không có lỗi whitespace. |
+
+Mỗi kịch bản dưới đây chạy trên cả bốn project development/production × desktop/mobile, dùng Chrome thực; mỗi project đạt 10/10:
+
+| Kịch bản | Nội dung xác nhận | Kết quả |
+| --- | --- | --- |
+| TC01/TC02 | Website bệnh nhân không có link đăng nhập hoặc dashboard nhân viên, kể cả menu mobile. | 4/4 PASS |
+| TC03 | Mở trực tiếp và tải lại `/login`; đúng tiêu đề, layout độc lập, một form và autocomplete. | 4/4 PASS |
+| TC15 | `/staff/login`, kể cả query role/redirect và hash, đều về đúng `/login`; một form; Back bỏ qua URL cũ. | 4/4 PASS |
+| TC04 | Validation rỗng/khoảng trắng, lỗi từng trường và focus vẫn hoạt động trên `/login`. | 4/4 PASS |
+| TC05 | Hiện/ẩn mật khẩu không submit form. | 4/4 PASS |
+| TC06/TC07 | Submit tại `/login?role=doctor&redirect=/doctor` không gửi request, lưu cookie/storage, tạo phiên hoặc điều hướng theo role. | 4/4 PASS |
+| TC08/TC09 – receptionist | Development giữ preview và Sidebar dẫn thẳng `/login`; production chuyển `/receptionist` về `/login`, không render dashboard. | 4/4 PASS |
+| TC08/TC09 – doctor | Development giữ preview và Sidebar dẫn thẳng `/login`; production chuyển `/doctor` về `/login`, không render dashboard. | 4/4 PASS |
+| TC10 | Sáu route `/`, `/booking-notice`, `/login`, `/receptionist`, `/doctor`, 404 tại 320/390/768/1440px không tràn ngang toàn trang. | 4/4 PASS |
+| TC13 | React Router, trang đặt lịch, anchor khác trang, history và 404 vẫn hoạt động. | 4/4 PASS |
+
+Mọi kịch bản đều theo dõi console warning/error và lỗi JavaScript: không có lỗi. Kiểm tra riêng bundle production không chứa nội dung dashboard preview; Git xác nhận component login, hai dashboard, CSS và canvas không thay đổi. Các tham chiếu URL giao diện cũ chỉ còn ở redirect, test tương thích và tài liệu mô tả URL cũ.
+
+Playwright hoàn tất trong khoảng 185,7 giây, gồm bước dọn server. Sau khi 40 test đã PASS, bước tự dừng Vite trên Windows bị kẹt; đã dừng đúng hai tiến trình Vite do lượt test tạo, sau đó Playwright xuất báo cáo và thoát với code 0. Không sửa cấu hình test để xử lý vấn đề môi trường này. Bằng chứng: `test-results/results.json` và `playwright-report/index.html` (được Git bỏ qua).
+
+Không stage, commit, push hoặc đóng Issue. Các mục untracked `.agents/` và `skills-lock.json` đã tồn tại trước thay đổi và được giữ nguyên.
