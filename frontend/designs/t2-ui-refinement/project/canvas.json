@@ -1,0 +1,14 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-11-03T13:47:01Z" },
+  "title": "Clinic Management – T2 UI Refinement",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 1280, "h": 960, "title": "Staff Login · Desktop", "expand": "fill" },
+    "Mobile.dc.html": { "x": 1360, "y": 0, "w": 390, "h": 844, "title": "Staff Login · Mobile" }
+  },
+  "order": ["Main.dc.html", "Mobile.dc.html"],
+  "notes": {},
+  "designSystems": []
+}

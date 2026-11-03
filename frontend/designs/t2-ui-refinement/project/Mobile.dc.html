@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Clinic Management · Đăng nhập trên điện thoại</title>
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}*{box-sizing:border-box}button:focus-visible,input:focus-visible{outline:3px solid #0284c7;outline-offset:3px}</style></helmet>
+<div style="min-height:844px;padding:24px 16px;background:#f8fafc;color:#0f172a;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;display:flex;flex-direction:column;gap:32px">
+  <header style="display:flex;align-items:center;gap:12px">
+    <div style="width:44px;height:44px;background:#0369a1;border-radius:12px;display:flex;align-items:center;justify-content:center;color:white"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3z"></path></svg></div>
+    <div><strong style="font-size:18px;display:block">Clinic Management</strong><span style="font-size:13px;color:#475569">Hệ thống dành cho nhân viên</span></div>
+  </header>
+  <main style="display:flex;flex-direction:column;gap:24px">
+    <div style="display:flex;flex-direction:column;gap:12px"><span style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:#0369a1">KHÔNG GIAN LÀM VIỆC</span><h1 style="margin:0;font-size:28px;line-height:1.25;letter-spacing:-0.5px">Một điểm truy cập.<br><span style="color:#0369a1">Đúng vai trò của bạn.</span></h1></div>
+    <section style="padding:24px;background:white;border:1px solid #e2e8f0;border-radius:24px;display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;flex-direction:column;gap:8px"><h2 style="margin:0;font-size:24px;line-height:1.3">Đăng nhập hệ thống phòng khám</h2><p style="margin:0;font-size:14px;color:#475569">Dành cho nhân viên được cấp quyền.</p></div>
+      <div style="padding:16px;border:1px solid #bae6fd;border-radius:12px;background:#f0f9ff;color:#075985;font-size:14px;line-height:1.6"><strong>Đăng nhập chưa khả dụng</strong><p style="margin:4px 0 0">Backend xác thực chưa được triển khai. Biểu mẫu hiện chỉ kiểm tra thông tin trên thiết bị.</p></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><label for="account" style="font-size:14px;font-weight:600">Tài khoản <span style="color:#be123c">*</span></label><input id="account" type="text" autocomplete="username" placeholder="Tên đăng nhập hoặc email" style="width:100%;min-height:48px;padding:12px;border:1px solid #94a3b8;border-radius:12px;font:inherit;font-size:14px"></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><label for="password" style="font-size:14px;font-weight:600">Mật khẩu <span style="color:#be123c">*</span></label><div style="display:flex;border:1px solid #94a3b8;border-radius:12px;overflow:hidden"><input id="password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu" style="width:100%;min-width:0;min-height:48px;padding:12px;border:0;font:inherit;font-size:14px"><button type="button" aria-label="Hiện mật khẩu" style="min-width:48px;min-height:48px;border:0;background:#fff;color:#475569"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
+      <button type="button" style="min-height:48px;border:0;border-radius:12px;background:#0369a1;color:#fff;font:inherit;font-size:14px;font-weight:700">Đăng nhập</button>
+      <p style="margin:0;font-size:13px;line-height:1.7;color:#475569">Chưa có tài khoản hoặc cần hỗ trợ? Vui lòng liên hệ người quản lý phòng khám.</p>
+    </section>
+  </main>
+  <footer style="font-size:13px;color:#475569;text-align:center;line-height:1.7">© 2026 Clinic Management<br>Thông tin không được gửi đi hoặc lưu lại khi gửi biểu mẫu.</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

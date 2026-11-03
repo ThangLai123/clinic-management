@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Clinic Management · Đăng nhập nhân viên</title>
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>body{margin:0}*{box-sizing:border-box}a{color:#0369a1}a:hover{color:#075985}button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #0284c7;outline-offset:3px}</style>
+</helmet>
+<div style="min-height:960px;background:#f8fafc;color:#0f172a;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:32px 24px;display:flex;flex-direction:column;gap:48px">
+  <header style="max-width:1120px;width:100%;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#0369a1;color:#fff"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3z"></path></svg></div>
+      <div><strong style="display:block;font-size:18px">Clinic Management</strong><span style="font-size:13px;color:#475569">Hệ thống dành cho nhân viên</span></div>
+    </div>
+    <span style="padding:8px 12px;border:1px solid #99f6e4;border-radius:24px;background:#f0fdfa;color:#115e59;font-size:13px;font-weight:600">Khu vực nội bộ</span>
+  </header>
+  <main style="width:100%;max-width:1040px;margin:auto;display:flex;flex-wrap:wrap;align-items:center;gap:64px">
+    <section style="flex:1 1 320px;display:flex;flex-direction:column;gap:24px">
+      <span style="font-size:12px;font-weight:700;letter-spacing:2px;color:#0369a1">KHÔNG GIAN LÀM VIỆC</span>
+      <h1 style="margin:0;font-size:40px;line-height:1.2;letter-spacing:-1px">Một điểm truy cập.<br><span style="color:#0369a1">Đúng vai trò của bạn.</span></h1>
+      <p style="margin:0;font-size:16px;line-height:1.8;color:#475569">Không gian làm việc dành riêng cho nhân viên phòng khám. Sử dụng tài khoản do đơn vị quản lý cấp để đăng nhập.</p>
+      <div style="padding:24px;display:flex;flex-direction:column;gap:12px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:16px">
+        <strong style="color:#115e59;font-size:15px">Tài khoản do phòng khám cấp</strong>
+        <p style="margin:0;color:#115e59;font-size:14px;line-height:1.7">Quyền truy cập sẽ được xác định từ tài khoản sau khi hệ thống xác thực được kết nối.</p>
+      </div>
+    </section>
+    <section style="flex:1 1 400px;padding:32px;display:flex;flex-direction:column;gap:24px;background:#fff;border:1px solid #e2e8f0;border-radius:24px;box-shadow:0 8px 32px #0f172a08">
+      <div style="display:flex;flex-direction:column;gap:8px"><h2 style="margin:0;font-size:26px;line-height:1.3;letter-spacing:-0.5px">Đăng nhập hệ thống phòng khám</h2><p style="margin:0;font-size:14px;color:#475569">Dành cho nhân viên được cấp quyền.</p></div>
+      <div style="padding:16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;color:#075985;font-size:14px;line-height:1.6"><strong>Đăng nhập chưa khả dụng</strong><p style="margin:4px 0 0">Backend xác thực chưa được triển khai. Biểu mẫu hiện chỉ kiểm tra thông tin trên thiết bị.</p></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><label for="account" style="font-size:14px;font-weight:600">Tài khoản <span style="color:#be123c">*</span></label><input id="account" type="text" placeholder="Tên đăng nhập hoặc email" autocomplete="username" style="width:100%;min-height:48px;padding:12px;border:1px solid #94a3b8;border-radius:12px;font:inherit;font-size:14px"></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><label for="password" style="font-size:14px;font-weight:600">Mật khẩu <span style="color:#be123c">*</span></label><div style="display:flex;border:1px solid #94a3b8;border-radius:12px;overflow:hidden"><input id="password" type="password" placeholder="Nhập mật khẩu" autocomplete="current-password" style="width:100%;min-width:0;min-height:48px;padding:12px;border:0;font:inherit;font-size:14px"><button type="button" aria-label="Hiện mật khẩu" style="min-width:48px;min-height:48px;border:0;background:#fff;color:#475569"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
+      <button type="button" style="min-height:48px;background:#0369a1;color:#fff;font:inherit;font-size:14px;font-weight:700;border:0;border-radius:12px">Đăng nhập</button>
+      <p style="margin:0;font-size:13px;line-height:1.7;color:#475569">Chưa có tài khoản hoặc cần hỗ trợ? Vui lòng liên hệ người quản lý phòng khám.</p>
+    </section>
+  </main>
+  <footer style="max-width:1120px;width:100%;margin:auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;font-size:13px;color:#475569"><span>© 2026 Clinic Management</span><span>Thông tin không được gửi đi hoặc lưu lại khi gửi biểu mẫu.</span></footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":960}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>
