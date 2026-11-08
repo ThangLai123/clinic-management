@@ -37,16 +37,16 @@ export const Badge: React.FC<BadgeProps> = ({
 
   const sizeStyles = {
     sm: 'text-[11px] px-2 py-0.5',
-    md: 'text-xs px-2.5 py-1',
+    md: 'text-[11px] px-2 py-0.5',
   };
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 font-medium border rounded-full select-none ${
+      className={`inline-flex items-center gap-1 whitespace-nowrap leading-4 font-medium border rounded-full select-none ${
         sizeStyles[size]
       } ${variantStyles[variant]} ${className}`}
     >
-      {dot && <span className={`w-1.5 h-1.5 rounded-full ${dotStyles[variant]}`} />}
+      {dot && <span className={`w-1.5 h-1.5 shrink-0 rounded-full ${dotStyles[variant]}`} />}
       {children}
     </span>
   );

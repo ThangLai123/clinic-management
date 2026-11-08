@@ -5,13 +5,11 @@ import {
   Clock,
   User,
   Phone,
-  MapPin,
-  CheckCircle2,
+  FileCheck,
   AlertTriangle,
   ArrowRight,
   ArrowLeft,
-  FileCheck,
-  ShieldCheck,
+  CheckCircle2,
   Search,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
@@ -19,8 +17,9 @@ import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { Textarea } from '../../../components/ui/Textarea';
 import { Card } from '../../../components/ui/Card';
+import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { clinicStore } from '../../../mock/clinicStore';
-import type { Appointment } from '../../../types/clinic';
+import type { Appointment, Gender } from '../../../types/clinic';
 
 const TIME_SLOTS = [
   '08:00 - 08:30',
@@ -29,6 +28,7 @@ const TIME_SLOTS = [
   '09:30 - 10:00',
   '10:00 - 10:30',
   '10:30 - 11:00',
+  '11:00 - 11:30',
   '14:00 - 14:30',
   '14:30 - 15:00',
   '15:00 - 15:30',
@@ -37,16 +37,16 @@ const TIME_SLOTS = [
   '16:30 - 17:00',
   '17:30 - 18:00',
   '18:00 - 18:30',
+  '18:30 - 19:00',
+  '19:00 - 19:30',
 ];
 
 const COMMON_SYMPTOMS = [
-  'Đau tai',
-  'Ù tai',
-  'Nghe kém',
-  'Chảy dịch tai',
-  'Nghẹt mũi',
-  'Chảy nước mũi',
-  'Đau vùng mũi xoang',
+  'Nghẹt mũi / Tắc mũi',
+  'Chảy nước mũi trong / đục',
+  'Đau nhức vùng mũi xoang',
+  'Đau tai / Chảy dịch tai',
+  'Ù tai / Giảm thính lực',
   'Đau họng',
   'Khàn tiếng',
   'Ho kéo dài',
@@ -58,12 +58,12 @@ export const AppointmentBookingPage: React.FC = () => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // 1: Info, 2: Symptoms & Date, 3: Review, 4: Success
   const [createdAppointment, setCreatedAppointment] = useState<Appointment | null>(null);
 
-  // Form states
+  // Form states matching appointments table
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [gender, setGender] = useState<'Nam' | 'Nữ' | 'Khác'>('Nam');
-  const [address, setAddress] = useState('');
+  const [gender, setGender] = useState<Gender>('MALE');
+  const [notes, setNotes] = useState('');
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const [appointmentDate, setAppointmentDate] = useState(todayStr);
@@ -71,7 +71,6 @@ export const AppointmentBookingPage: React.FC = () => {
   const [reason, setReason] = useState('');
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [symptomDuration, setSymptomDuration] = useState('Khoảng 2 - 3 ngày');
-  const [notes, setNotes] = useState('');
 
   // Errors
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -90,7 +89,7 @@ export const AppointmentBookingPage: React.FC = () => {
     } else if (!/^(0[3|5|7|8|9])[0-9]{8}$/.test(phoneNumber.replace(/\s+/g, ''))) {
       err.phoneNumber = 'Số điện thoại không hợp lệ (cần 10 chữ số chuẩn)';
     }
-    if (!birthDate) err.birthDate = 'Vui lòng chọn ngày sinh';
+    // birthDate is optional per appointments table
     setErrors(err);
     return Object.keys(err).length === 0;
   };
@@ -103,9 +102,6 @@ export const AppointmentBookingPage: React.FC = () => {
       err.appointmentDate = 'Không thể đặt lịch vào ngày trong quá khứ';
     }
     if (!timeSlot) err.timeSlot = 'Vui lòng chọn khung giờ khám';
-    if (!reason.trim() && selectedSymptoms.length === 0) {
-      err.reason = 'Vui lòng nhập lý do khám hoặc chọn ít nhất 1 triệu chứng';
-    }
     setErrors(err);
     return Object.keys(err).length === 0;
   };
@@ -119,18 +115,22 @@ export const AppointmentBookingPage: React.FC = () => {
   };
 
   const handleConfirmBooking = () => {
+    const symptomsText = selectedSymptoms.length > 0
+      ? selectedSymptoms.join(', ') + (reason ? ` - ${reason}` : '')
+      : reason.trim() || undefined;
+
+    const timeRaw = timeSlot.split(' - ')[0] + ':00';
+
     const newApt = clinicStore.addAppointment({
-      patientName: fullName.trim(),
-      phoneNumber: phoneNumber.trim(),
-      birthDate,
+      fullName: fullName.trim(),
+      phone: phoneNumber.trim(),
+      birthDate: birthDate || undefined,
       gender,
-      address: address.trim() || undefined,
       appointmentDate,
-      timeSlot,
-      reason: reason.trim() || selectedSymptoms.join(', '),
-      symptoms: selectedSymptoms,
-      symptomDuration,
+      appointmentTime: timeRaw,
+      symptoms: symptomsText,
       notes: notes.trim() || undefined,
+      source: 'ONLINE',
     });
 
     setCreatedAppointment(newApt);
@@ -138,32 +138,32 @@ export const AppointmentBookingPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
       {/* Step Indicators */}
       {step < 4 && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="text-center space-y-1">
             <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
-              Use Case 01: Đặt lịch hẹn khám bệnh
+              Đặt lịch khám trực tuyến
             </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-              Đăng Ký Khám Tai Mũi Họng Trực Tuyến
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+              Đặt lịch khám Tai Mũi Họng
             </h1>
             <p className="text-xs text-slate-500">
-              Điền thông tin và mô tả triệu chứng ban đầu để được bố trí lịch khám nhanh chóng.
+              Điền thông tin và mô tả triệu chứng ban đầu để được bố trí lịch tiếp nhận nhanh chóng.
             </p>
           </div>
 
-          <div className="flex items-center justify-center max-w-xl mx-auto pt-2">
+          <div className="flex items-center justify-between max-w-xl mx-auto pt-2">
             {[
-              { num: 1, label: 'Thông tin cá nhân' },
-              { num: 2, label: 'Thời gian & Triệu chứng' },
-              { num: 3, label: 'Xem lại & Xác nhận' },
+              { num: 1, label: 'Thông tin' },
+              { num: 2, label: 'Ngày & Giờ' },
+              { num: 3, label: 'Xác nhận' },
             ].map((s, idx) => (
               <React.Fragment key={s.num}>
-                <div className="flex flex-col items-center">
+                <div className="flex flex-col items-center gap-1.5">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${
                       step === s.num
                         ? 'bg-blue-700 text-white shadow-md'
                         : step > s.num
@@ -171,11 +171,11 @@ export const AppointmentBookingPage: React.FC = () => {
                         : 'bg-slate-100 text-slate-400'
                     }`}
                   >
-                    {step > s.num ? <CheckCircle2 className="h-4 w-4" /> : s.num}
+                    {step > s.num ? '✓' : s.num}
                   </div>
                   <span
-                    className={`text-[11px] font-medium mt-1 ${
-                      step === s.num ? 'text-blue-700 font-bold' : 'text-slate-500'
+                    className={`text-[11px] font-semibold ${
+                      step >= s.num ? 'text-slate-900' : 'text-slate-400'
                     }`}
                   >
                     {s.label}
@@ -199,7 +199,7 @@ export const AppointmentBookingPage: React.FC = () => {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3 text-amber-900 text-xs">
           <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
           <p>
-            <strong>Lưu ý:</strong> Khung giờ đặt hẹn chỉ có giá trị tiếp nhận ưu tiên tại phòng khám. Nếu có dấu hiệu khó thở cấp hoặc nuốt dị vật sắc nhọn, xin vui lòng đến trực tiếp cơ sở y tế gần nhất.
+            <strong>Lưu ý:</strong> Khung giờ đặt hẹn có giá trị ưu tiên tiếp nhận tại quầy lễ tân phòng khám. Nếu có dấu hiệu khó thở cấp hoặc nuốt dị vật sắc nhọn, xin vui lòng đến trực tiếp cơ sở y tế gần nhất.
           </p>
         </div>
       )}
@@ -226,38 +226,30 @@ export const AppointmentBookingPage: React.FC = () => {
                 error={errors.phoneNumber}
                 required
                 leftIcon={<Phone className="h-4 w-4" />}
-                helperText="Dùng để nhận mã lịch hẹn và tra cứu hồ sơ khám sau này."
+                helperText="Dùng để nhận mã lịch hẹn và tra cứu hồ sơ khám qua OTP sau này."
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
-                label="Ngày sinh"
+                label="Ngày sinh (không bắt buộc)"
                 type="date"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
-                error={errors.birthDate}
-                required
+                helperText="Để trống nếu người bệnh chưa nhớ rõ ngày tháng năm sinh"
               />
               <Select
                 label="Giới tính"
                 value={gender}
-                onChange={(e) => setGender(e.target.value as any)}
+                onChange={(e) => setGender(e.target.value as Gender)}
                 options={[
-                  { value: 'Nam', label: 'Nam' },
-                  { value: 'Nữ', label: 'Nữ' },
-                  { value: 'Khác', label: 'Khác' },
+                  { value: 'MALE', label: 'Nam' },
+                  { value: 'FEMALE', label: 'Nữ' },
+                  { value: 'OTHER', label: 'Khác' },
+                  { value: 'UNSPECIFIED', label: 'Chưa xác định' },
                 ]}
               />
             </div>
-
-            <Input
-              label="Địa chỉ cư trú (không bắt buộc)"
-              placeholder="Ví dụ: Số 15 Phố Huế, Q. Hoàn Kiếm, Hà Nội"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              leftIcon={<MapPin className="h-4 w-4" />}
-            />
 
             <div className="flex justify-end pt-4 border-t border-slate-100">
               <Button onClick={handleNextToStep2} rightIcon={<ArrowRight className="h-4 w-4" />}>
@@ -283,74 +275,64 @@ export const AppointmentBookingPage: React.FC = () => {
                 required
                 leftIcon={<Calendar className="h-4 w-4" />}
               />
-              <Select
-                label="Khung giờ hẹn mong muốn"
-                value={timeSlot}
-                onChange={(e) => setTimeSlot(e.target.value)}
-                error={errors.timeSlot}
-                options={TIME_SLOTS.map((t) => ({ value: t, label: t }))}
-              />
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Khung giờ dự kiến <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={timeSlot}
+                    onChange={(e) => setTimeSlot(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 text-slate-800 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-700"
+                  >
+                    {TIME_SLOTS.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
+                  </select>
+                  <Clock className="h-4 w-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                </div>
+              </div>
             </div>
 
-            {/* Symptoms selector */}
+            {/* Symptoms Tags */}
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-slate-700">
-                Các triệu chứng bạn đang gặp phải (chọn các mục phù hợp):
+                Triệu chứng phổ biến (nhấp chọn nhiều mục nếu có):
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="flex flex-wrap gap-2">
                 {COMMON_SYMPTOMS.map((sym) => {
-                  const isChecked = selectedSymptoms.includes(sym);
+                  const isSelected = selectedSymptoms.includes(sym);
                   return (
                     <button
-                      key={sym}
                       type="button"
+                      key={sym}
                       onClick={() => toggleSymptom(sym)}
-                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs text-left transition-all cursor-pointer ${
-                        isChecked
-                          ? 'border-blue-600 bg-blue-50 text-blue-800 font-semibold shadow-2xs'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      <div
-                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                          isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300'
-                        }`}
-                      >
-                        {isChecked && <CheckCircle2 className="h-3 w-3" />}
-                      </div>
-                      <span className="truncate">{sym}</span>
+                      {isSelected ? `✓ ${sym}` : `+ ${sym}`}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Select
-                label="Thời gian triệu chứng xuất hiện"
-                value={symptomDuration}
-                onChange={(e) => setSymptomDuration(e.target.value)}
-                options={[
-                  { value: 'Mới bị trong ngày hôm nay', label: 'Mới bị trong ngày hôm nay' },
-                  { value: 'Khoảng 2 - 3 ngày', label: 'Khoảng 2 - 3 ngày' },
-                  { value: 'Khoảng 1 tuần nay', label: 'Khoảng 1 tuần nay' },
-                  { value: 'Kéo dài trên 2 tuần', label: 'Kéo dài trên 2 tuần' },
-                  { value: 'Bị mạn tính tái phát nhiều đợt', label: 'Bị mạn tính tái phát nhiều đợt' },
-                ]}
-              />
-
-              <Input
-                label="Lý do khám chính"
-                placeholder="Ví dụ: Nghẹt mũi, đau nhức hốc mắt và trán"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                error={errors.reason}
-              />
-            </div>
+            <Textarea
+              label="Mô tả triệu chứng cụ thể / Lý do đến khám (không bắt buộc)"
+              placeholder="Ví dụ: Đau tai phải 3 ngày nay, có sốt nhẹ về chiều, đã uống panadol nhưng chưa đỡ..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+            />
 
             <Textarea
-              label="Ghi chú thêm cho Bác sĩ (nếu có tiền sử dị ứng, thuốc đang dùng...)"
-              placeholder="Ví dụ: Có tiền sử dị ứng Penicillin, đang dùng thuốc hạ huyết áp..."
+              label="Ghi chú khác cho phòng khám (không bắt buộc)"
+              placeholder="Ví dụ: Có người nhà đi cùng, muốn khám bác sĩ tai mũi họng người lớn..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
@@ -361,7 +343,7 @@ export const AppointmentBookingPage: React.FC = () => {
                 Quay lại
               </Button>
               <Button onClick={handleNextToStep3} rightIcon={<ArrowRight className="h-4 w-4" />}>
-                Kiểm tra lại thông tin
+                Xem lại thông tin đặt hẹn
               </Button>
             </div>
           </div>
@@ -374,35 +356,33 @@ export const AppointmentBookingPage: React.FC = () => {
           <div className="space-y-6">
             <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-4 text-xs">
               <div className="border-b border-slate-200 pb-3">
-                <span className="text-[11px] font-bold text-blue-700 uppercase">1. Thông tin bệnh nhân</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                <span className="text-[11px] font-bold text-blue-700 uppercase">1. Thông tin người bệnh</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-slate-700">
                   <p><strong>Họ và tên:</strong> {fullName}</p>
                   <p><strong>Số điện thoại:</strong> {phoneNumber}</p>
-                  <p><strong>Ngày sinh:</strong> {birthDate}</p>
-                  <p><strong>Giới tính:</strong> {gender}</p>
-                  {address && <p className="col-span-2"><strong>Địa chỉ:</strong> {address}</p>}
+                  <p><strong>Ngày sinh:</strong> {birthDate || 'Chưa cung cấp'}</p>
+                  <p><strong>Giới tính:</strong> {gender === 'MALE' ? 'Nam' : gender === 'FEMALE' ? 'Nữ' : gender === 'OTHER' ? 'Khác' : 'Chưa xác định'}</p>
                 </div>
               </div>
 
               <div>
                 <span className="text-[11px] font-bold text-blue-700 uppercase">2. Chi tiết lịch hẹn</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-slate-700">
                   <p><strong>Ngày hẹn khám:</strong> {appointmentDate}</p>
                   <p><strong>Khung giờ:</strong> {timeSlot}</p>
                   <p className="col-span-2">
                     <strong>Triệu chứng khai báo:</strong>{' '}
                     {selectedSymptoms.length > 0 ? selectedSymptoms.join(', ') : 'Chưa chọn'}
                   </p>
-                  <p><strong>Thời gian bị bệnh:</strong> {symptomDuration}</p>
-                  <p><strong>Lý do khám:</strong> {reason || selectedSymptoms.join(', ')}</p>
+                  {reason && <p className="col-span-2"><strong>Mô tả chi tiết:</strong> {reason}</p>}
                   {notes && <p className="col-span-2"><strong>Ghi chú:</strong> {notes}</p>}
                 </div>
               </div>
             </div>
 
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>Dữ liệu đặt lịch sẽ được chuyển ngay đến bàn Lễ tân phòng khám để chuẩn bị hồ sơ tiếp nhận.</span>
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>Yêu cầu đặt lịch của bạn sẽ được gửi tới bộ phận Tiếp đón & Lễ tân để liên hệ xác nhận.</span>
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
@@ -428,45 +408,43 @@ export const AppointmentBookingPage: React.FC = () => {
             <div className="space-y-1">
               <h2 className="text-2xl font-black text-slate-900">Đặt Lịch Hẹn Thành Công!</h2>
               <p className="text-xs text-slate-500">
-                Yêu cầu đặt hẹn của bạn đã được ghi nhận trên hệ thống tiếp nhận của phòng khám.
+                Yêu cầu đặt hẹn của bạn đã được ghi nhận trên hệ thống phòng khám với trạng thái chờ xác nhận.
               </p>
             </div>
 
             {/* Receipt Summary Box */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-left text-xs space-y-3">
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                <span className="text-slate-500">Mã lịch hẹn:</span>
-                <span className="font-mono font-bold text-sm text-blue-700">{createdAppointment.id}</span>
+                <span className="text-slate-500 font-medium">Mã lịch hẹn:</span>
+                <span className="font-mono font-bold text-base text-blue-700">{createdAppointment.appointmentCode}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500">Bệnh nhân:</span>
-                <span className="font-semibold text-slate-900">{createdAppointment.patientName}</span>
+                <span className="text-slate-500">Họ và tên bệnh nhân:</span>
+                <span className="font-semibold text-slate-900">{createdAppointment.fullName}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Số điện thoại:</span>
-                <span className="font-semibold text-slate-900">{createdAppointment.phoneNumber}</span>
+                <span className="font-semibold text-slate-900">{createdAppointment.phone}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Ngày khám:</span>
                 <span className="font-semibold text-slate-900">{createdAppointment.appointmentDate}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500">Khung giờ hẹn:</span>
-                <span className="font-semibold text-blue-700">{createdAppointment.timeSlot}</span>
+                <span className="text-slate-500">Giờ hẹn:</span>
+                <span className="font-semibold text-blue-700">{createdAppointment.appointmentTime.slice(0, 5)}</span>
               </div>
               <div className="flex items-center justify-between border-t border-slate-200 pt-2">
                 <span className="text-slate-500">Trạng thái:</span>
-                <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  Chờ Lễ Tân Tiếp Nhận (UC-04/05)
-                </span>
+                <StatusBadge type="appointment" value={createdAppointment.status} />
               </div>
             </div>
 
             {/* Instructions */}
             <div className="text-xs text-slate-500 text-left bg-blue-50/60 p-4 rounded-xl border border-blue-100 space-y-1.5">
               <p className="font-bold text-blue-900">Hướng dẫn dành cho bệnh nhân khi đến khám:</p>
-              <p>• Vui lòng có mặt tại quầy Lễ tân trước giờ hẹn 10 phút.</p>
-              <p>• Đọc <strong>Mã lịch hẹn</strong> hoặc <strong>Số điện thoại</strong> để nhân viên làm thủ tục vào phòng khám ngay.</p>
+              <p>• Vui lòng có mặt tại quầy Lễ tân trước giờ hẹn 10 phút để được kiểm tra và tiếp nhận.</p>
+              <p>• Đọc <strong>Mã lịch hẹn ({createdAppointment.appointmentCode})</strong> hoặc <strong>Số điện thoại</strong> để nhân viên làm thủ tục vào khám theo thứ tự ưu tiên.</p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
@@ -475,9 +453,9 @@ export const AppointmentBookingPage: React.FC = () => {
                   Tra cứu lịch sử khám
                 </Button>
               </Link>
-              <Link to="/receptionist/appointments" className="flex-1">
-                <Button variant="primary" className="w-full text-xs justify-center" leftIcon={<ArrowRight className="h-4 w-4" />}>
-                  Xem tại Cổng Lễ Tân (UC-05)
+              <Link to="/" className="flex-1">
+                <Button variant="primary" className="w-full text-xs justify-center">
+                  Về trang chủ phòng khám
                 </Button>
               </Link>
             </div>
@@ -488,3 +466,4 @@ export const AppointmentBookingPage: React.FC = () => {
   );
 };
 
+export default AppointmentBookingPage;

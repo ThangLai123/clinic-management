@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "name": "clinic-managerment",
+  "scripts": {
+    "dev": "node scripts/dev.mjs"
+  }
+}

@@ -3,19 +3,19 @@ import type { HealthCheckResponse } from '../types/health';
 
 export const healthService = {
   getPublicHealth(): Promise<HealthCheckResponse> {
-    return apiClient<HealthCheckResponse>('/api/v1/health');
+    return apiClient<HealthCheckResponse>('/api/health');
   },
 
   getAdminHealth(): Promise<HealthCheckResponse> {
-    return apiClient<HealthCheckResponse>('/api/v1/admin/health');
+    return apiClient<HealthCheckResponse>('/api/admin/health');
   },
 
   getDoctorHealth(): Promise<HealthCheckResponse> {
-    return apiClient<HealthCheckResponse>('/api/v1/doctor/health');
+    return apiClient<HealthCheckResponse>('/api/doctor/health');
   },
 
   getReceptionistHealth(): Promise<HealthCheckResponse> {
-    return apiClient<HealthCheckResponse>('/api/v1/receptionist/health');
+    return apiClient<HealthCheckResponse>('/api/receptionist/health');
   },
 };
 

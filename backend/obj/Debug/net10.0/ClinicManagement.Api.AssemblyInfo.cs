@@ -10,10 +10,11 @@
 using System;
 using System.Reflection;
 
+[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("f0b4c145-023e-436d-876b-3166ddd45f2a")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("ClinicManagement.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+de8b4f50e670e0e3fe526fac229dbce279a2e3f2")]
 [assembly: System.Reflection.AssemblyProductAttribute("ClinicManagement.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ClinicManagement.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

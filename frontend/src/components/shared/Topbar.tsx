@@ -18,33 +18,32 @@ export const Topbar: React.FC<TopbarProps> = ({ title, subtitle, badge, actions 
   });
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200/90 px-6 flex items-center justify-between shrink-0 sticky top-0 z-20">
-      <div className="flex items-center gap-3">
-        <div>
+    <header className="bg-white border-b border-slate-200/90 px-4 sm:px-5 py-3 shrink-0 sticky top-0 z-20">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-1 basis-[260px]">
           <div className="flex items-center gap-2.5">
-            <h1 className="text-base font-bold text-slate-900 tracking-tight">{title}</h1>
+            <h1 className="text-base leading-6 font-bold text-slate-900 tracking-tight">{title}</h1>
             {badge}
           </div>
-          {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-xs leading-4 text-slate-500 mt-0.5 max-w-[600px]">{subtitle}</p>}
         </div>
-      </div>
 
-      <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 max-w-full">
         {/* Date & Time pill */}
-        <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200/60 rounded-full text-xs text-slate-600 font-medium">
+        <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200/60 rounded-full text-xs whitespace-nowrap text-slate-600 font-medium">
           <Clock className="h-3.5 w-3.5 text-slate-400" />
           <span>{dateStr}</span>
         </div>
 
         {/* Global Search shortcut mock */}
-        <div className="hidden lg:flex items-center relative">
+        {!actions && <div className="hidden xl:flex items-center relative">
           <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
           <input
             type="text"
             placeholder="Tìm nhanh BN, thuốc, mã đơn..."
             className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg w-52 focus:w-64 focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-400"
           />
-        </div>
+        </div>}
 
         {/* Notification Bell */}
         <button
@@ -55,7 +54,8 @@ export const Topbar: React.FC<TopbarProps> = ({ title, subtitle, badge, actions 
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-600 rounded-full"></span>
         </button>
 
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+          {actions && <div className="flex flex-wrap items-center justify-end gap-2 [&_button]:shrink-0 [&_button]:whitespace-nowrap">{actions}</div>}
+        </div>
       </div>
     </header>
   );

@@ -1,112 +1,176 @@
 import React from 'react';
 import { Badge } from '../ui/Badge';
+import {
+  APPOINTMENT_STATUS_MAP,
+  RECEPTION_STATUS_MAP,
+  RECEPTION_TYPE_MAP,
+  EXAMINATION_STATUS_MAP,
+  MEDICAL_RECORD_STATUS_MAP,
+  MEDICINE_LOT_STATUS_MAP,
+  PRESCRIPTION_STATUS_MAP,
+  DISPENSATION_STATUS_MAP,
+  INVOICE_STATUS_MAP,
+  PAYMENT_STATUS_MAP,
+  STAFF_STATUS_MAP,
+} from '../../types/clinic';
 import type {
   AppointmentStatus,
   ReceptionStatus,
-  RoomStatus,
+  ReceptionType,
+  ExaminationStatus,
+  MedicalRecordStatus,
   PrescriptionStatus,
+  DispensationStatus,
   InvoiceStatus,
-  ReceptionPriority,
+  PaymentStatus,
+  MedicineLotStatus,
+  StaffUserStatus,
 } from '../../types/clinic';
 
-export const StatusBadge: React.FC<{
-  type: 'appointment' | 'reception' | 'room' | 'prescription' | 'invoice' | 'priority';
-  value: string;
-}> = ({ type, value }) => {
+export interface StatusBadgeProps {
+  type:
+    | 'appointment'
+    | 'reception'
+    | 'receptionType'
+    | 'examination'
+    | 'medicalRecord'
+    | 'prescription'
+    | 'dispensation'
+    | 'invoice'
+    | 'payment'
+    | 'lot'
+    | 'staff'
+    | 'priority'
+    | 'room';
+  value?: string | null;
+  status?: string | null;
+}
+
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ type, value, status }) => {
+  const val = (status || value || '') as string;
+
   if (type === 'appointment') {
-    const status = value as AppointmentStatus;
-    switch (status) {
-      case 'CHO_XAC_NHAN':
-        return <Badge variant="amber" dot>Chờ xác nhận</Badge>;
-      case 'DA_XAC_NHAN':
-        return <Badge variant="blue" dot>Đã xác nhận</Badge>;
-      case 'DA_TIEP_NHAN':
-        return <Badge variant="green" dot>Đã tiếp nhận</Badge>;
-      case 'DA_HUY':
-        return <Badge variant="rose" dot>Đã hủy</Badge>;
-      case 'KHONG_DEN':
-        return <Badge variant="slate" dot>Không đến</Badge>;
-      default:
-        return <Badge variant="slate">{value}</Badge>;
+    const meta = APPOINTMENT_STATUS_MAP[val as AppointmentStatus];
+    if (meta) {
+      const variant =
+        val === 'CONFIRMED'
+          ? 'blue'
+          : val === 'CHECKED_IN'
+          ? 'green'
+          : val === 'PENDING'
+          ? 'amber'
+          : val === 'CANCELLED'
+          ? 'slate'
+          : 'rose';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
     }
   }
 
   if (type === 'reception') {
-    const status = value as ReceptionStatus;
-    switch (status) {
-      case 'CHO_PHAN_PHONG':
-        return <Badge variant="amber" dot>Chờ phân phòng</Badge>;
-      case 'CHO_KHAM':
-        return <Badge variant="blue" dot>Chờ khám</Badge>;
-      case 'DANG_KHAM':
-        return <Badge variant="purple" dot>Đang khám</Badge>;
-      case 'CHO_PHAT_THUOC':
-        return <Badge variant="teal" dot>Chờ phát thuốc</Badge>;
-      case 'CHO_THANH_TOAN':
-        return <Badge variant="amber" dot>Chờ thanh toán</Badge>;
-      case 'HOAN_TAT':
-        return <Badge variant="green" dot>Hoàn tất</Badge>;
-      default:
-        return <Badge variant="slate">{value}</Badge>;
+    const meta = RECEPTION_STATUS_MAP[val as ReceptionStatus];
+    if (meta) {
+      const variant =
+        val === 'WAITING'
+          ? 'amber'
+          : val === 'IN_EXAM'
+          ? 'blue'
+          : val === 'COMPLETED'
+          ? 'green'
+          : 'slate';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
     }
   }
 
-  if (type === 'priority') {
-    const priority = value as ReceptionPriority;
-    switch (priority) {
-      case 'BINH_THUONG':
-        return <Badge variant="slate">Bình thường</Badge>;
-      case 'UU_TIEN':
-        return <Badge variant="amber" dot>Ưu tiên</Badge>;
-      case 'CAP_BACH':
-        return <Badge variant="rose" dot>Cấp bách</Badge>;
-      default:
-        return <Badge variant="slate">{value}</Badge>;
+  if (type === 'receptionType') {
+    const meta = RECEPTION_TYPE_MAP[val as ReceptionType];
+    if (meta) {
+      return (
+        <span className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded text-[11px] border ${meta.badge}`}>
+          {meta.label}
+        </span>
+      );
     }
   }
 
-  if (type === 'room') {
-    const status = value as RoomStatus;
-    switch (status) {
-      case 'SAN_SANG':
-        return <Badge variant="green" dot>Sẵn sàng</Badge>;
-      case 'DANG_KHAM':
-        return <Badge variant="blue" dot>Đang khám</Badge>;
-      case 'TAM_DUNG':
-        return <Badge variant="slate" dot>Tạm dừng</Badge>;
-      default:
-        return <Badge variant="slate">{value}</Badge>;
+  if (type === 'examination') {
+    const meta = EXAMINATION_STATUS_MAP[val as ExaminationStatus];
+    if (meta) {
+      const variant = val === 'IN_PROGRESS' ? 'blue' : val === 'COMPLETED' ? 'green' : 'slate';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
+    }
+  }
+
+  if (type === 'medicalRecord') {
+    const meta = MEDICAL_RECORD_STATUS_MAP[val as MedicalRecordStatus];
+    if (meta) {
+      const variant = val === 'FINALIZED' ? 'green' : 'amber';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
     }
   }
 
   if (type === 'prescription') {
-    const status = value as PrescriptionStatus;
-    switch (status) {
-      case 'BAN_NHAP':
-        return <Badge variant="slate">Bản nháp</Badge>;
-      case 'CHO_PHAT':
-        return <Badge variant="amber" dot>Chờ phát thuốc</Badge>;
-      case 'DA_PHAT':
-        return <Badge variant="green" dot>Đã phát thuốc</Badge>;
-      default:
-        return <Badge variant="slate">{value}</Badge>;
+    const meta = PRESCRIPTION_STATUS_MAP[val as PrescriptionStatus];
+    if (meta) {
+      const variant = val === 'SIGNED' ? 'green' : val === 'DRAFT' ? 'amber' : 'slate';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
+    }
+  }
+
+  if (type === 'dispensation') {
+    const meta = DISPENSATION_STATUS_MAP[val as DispensationStatus];
+    if (meta) {
+      const variant = val === 'COMPLETED' ? 'green' : val === 'PENDING' ? 'amber' : 'slate';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
     }
   }
 
   if (type === 'invoice') {
-    const status = value as InvoiceStatus;
-    switch (status) {
-      case 'CHO_THANH_TOAN':
-        return <Badge variant="amber" dot>Chưa thanh toán</Badge>;
-      case 'DA_THANH_TOAN':
-        return <Badge variant="green" dot>Đã thanh toán</Badge>;
-      case 'DA_HUY':
-        return <Badge variant="rose" dot>Đã hủy</Badge>;
-      default:
-        return <Badge variant="slate">{value}</Badge>;
+    const meta = INVOICE_STATUS_MAP[val as InvoiceStatus];
+    if (meta) {
+      const variant =
+        val === 'PAID'
+          ? 'green'
+          : val === 'PARTIAL'
+          ? 'amber'
+          : val === 'UNPAID'
+          ? 'rose'
+          : 'slate';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
     }
   }
 
-  return <Badge variant="slate">{value}</Badge>;
+  if (type === 'payment') {
+    const meta = PAYMENT_STATUS_MAP[val as PaymentStatus];
+    if (meta) {
+      const variant =
+        val === 'SUCCESS'
+          ? 'green'
+          : val === 'PENDING'
+          ? 'amber'
+          : val === 'FAILED'
+          ? 'rose'
+          : 'slate';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
+    }
+  }
+
+  if (type === 'lot') {
+    const meta = MEDICINE_LOT_STATUS_MAP[val as MedicineLotStatus];
+    if (meta) {
+      const variant = val === 'AVAILABLE' ? 'green' : val === 'QUARANTINED' ? 'amber' : 'rose';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
+    }
+  }
+
+  if (type === 'staff') {
+    const meta = STAFF_STATUS_MAP[val as StaffUserStatus];
+    if (meta) {
+      const variant = val === 'ACTIVE' ? 'green' : val === 'LOCKED' ? 'rose' : 'slate';
+      return <Badge variant={variant} dot>{meta.label}</Badge>;
+    }
+  }
+
+  return <Badge variant="slate">{val}</Badge>;
 };
 
+export default StatusBadge;

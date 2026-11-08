@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   ClipboardList,
@@ -11,52 +11,140 @@ import {
   ArrowRight,
   ShieldCheck,
   CheckCircle2,
+  Lock,
+  Save,
+  Clock,
+  AlertCircle,
 } from 'lucide-react';
 import { Topbar } from '../../../components/shared/Topbar';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
-import { Modal } from '../../../components/ui/Modal';
+import { Input } from '../../../components/ui/Input';
+import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { useClinicStore } from '../../../mock/clinicStore';
 import type { MedicalRecord } from '../../../types/clinic';
+import { MEDICAL_RECORD_STATUS_MAP } from '../../../types/database';
 
 export const MedicalRecordDetailPage: React.FC = () => {
   const store = useClinicStore();
+  const [searchParams] = useSearchParams();
+  const examIdParam = searchParams.get('examId');
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord>(store.medicalRecords[0] || null);
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
+
+  // Form states for active record
+  const [diagnosis, setDiagnosis] = useState('');
+  const [conclusion, setConclusion] = useState('');
+  const [treatmentPlan, setTreatmentPlan] = useState('');
+  const [doctorAdvice, setDoctorAdvice] = useState('');
+  const [followUpDate, setFollowUpDate] = useState('2026-11-14');
+
+  // Load record on mount or parameter change
+  useEffect(() => {
+    let rec: MedicalRecord | undefined;
+    if (examIdParam) {
+      rec = store.medicalRecords.find((r) => r.examinationId === examIdParam);
+    }
+    if (!rec) {
+      rec = store.medicalRecords[0];
+    }
+
+    if (rec) {
+      setSelectedRecord(rec);
+      setDiagnosis(rec.diagnosis || '');
+      setConclusion(rec.conclusion || '');
+      setTreatmentPlan(rec.treatmentPlan || '');
+      setDoctorAdvice(rec.doctorAdvice || '');
+      setFollowUpDate(rec.followUpDate || '2026-11-14');
+    }
+  }, [examIdParam, store.medicalRecords]);
+
+  const handleSelectRecord = (rec: MedicalRecord) => {
+    setSelectedRecord(rec);
+    setDiagnosis(rec.diagnosis || '');
+    setConclusion(rec.conclusion || '');
+    setTreatmentPlan(rec.treatmentPlan || '');
+    setDoctorAdvice(rec.doctorAdvice || '');
+    setFollowUpDate(rec.followUpDate || '2026-11-14');
+  };
+
+  const handleSaveDraft = () => {
+    if (!selectedRecord) return;
+    store.saveMedicalRecord({
+      examinationId: selectedRecord.examinationId,
+      diagnosis,
+      conclusion,
+      treatmentPlan,
+      doctorAdvice,
+      followUpDate,
+      status: 'DRAFT',
+    });
+    alert('Đã lưu bản nháp bệnh án (DRAFT)!');
+  };
+
+  const handleFinalize = () => {
+    if (!selectedRecord) return;
+    if (!diagnosis.trim()) {
+      alert('Chẩn đoán bệnh là bắt buộc để chốt bệnh án.');
+      return;
+    }
+
+    if (window.confirm('Bạn có chắc chắn muốn chốt bệnh án (FINALIZED)? Sau khi chốt, hồ sơ sẽ được khóa và không thể chỉnh sửa.')) {
+      const updated = store.saveMedicalRecord({
+        examinationId: selectedRecord.examinationId,
+        diagnosis,
+        conclusion,
+        treatmentPlan,
+        doctorAdvice,
+        followUpDate,
+        status: 'FINALIZED',
+      });
+      setSelectedRecord(updated);
+    }
+  };
 
   const filteredRecords = store.medicalRecords.filter((r) => {
+    const q = searchTerm.toLowerCase();
     return (
-      r.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+      r.medicalRecordCode.toLowerCase().includes(q) ||
+      (r.patientName || '').toLowerCase().includes(q) ||
+      (r.diagnosis || '').toLowerCase().includes(q)
     );
   });
+
+  const isFinalized = selectedRecord?.status === 'FINALIZED';
 
   return (
     <div className="space-y-6">
       <Topbar
-        title="Quản Lý Hồ Sơ Bệnh Án Điện Tử Tai Mũi Họng"
-        subtitle="Use Case 11: Tổng hợp bệnh sử, kết quả khám lâm sàng, nội soi NBI, chẩn đoán ICD-10 và lưu trữ bệnh án điện tử."
+        title="Hồ sơ bệnh án"
+        subtitle="Chẩn đoán, điều trị và hướng dẫn tái khám."
         actions={
           selectedRecord && (
-            <Button onClick={() => setIsPrintModalOpen(true)} leftIcon={<Printer className="h-4 w-4" />}>
-              In bệnh án tóm tắt
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Link to={`/doctor/prescriptions?examId=${selectedRecord.examinationId}`}>
+                <Button size="sm" variant="outline" leftIcon={<Pill className="h-4 w-4" />}>
+                  Kê đơn thuốc
+                </Button>
+              </Link>
+              <Button size="sm" onClick={() => window.print()} leftIcon={<Printer className="h-4 w-4" />}>
+                In bệnh án
+              </Button>
+            </div>
           )
         }
       />
 
       {/* Grid: Records List on Left, Detail on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column: Records list */}
-        <div className="lg:col-span-4 space-y-4">
+        <div className="lg:col-span-4 min-w-0 space-y-4">
           <div className="relative">
             <Search className="h-4 w-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Tìm theo Mã BA, tên người bệnh, chẩn đoán..."
+              placeholder="Tìm theo Mã BA, tên người bệnh..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
@@ -72,7 +160,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                 return (
                   <div
                     key={rec.id}
-                    onClick={() => setSelectedRecord(rec)}
+                    onClick={() => handleSelectRecord(rec)}
                     className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-1.5 ${
                       isSelected
                         ? 'border-blue-600 bg-blue-50/60 shadow-xs ring-1 ring-blue-600/20'
@@ -80,15 +168,15 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 text-xs">{rec.patientName}</span>
-                      <span className="font-mono text-[10px] text-blue-700 font-bold">{rec.id}</span>
+                      <span className="font-bold text-slate-900 text-xs">{rec.patientName || 'Chưa có thông tin'}</span>
+                      <StatusBadge type="medicalRecord" status={rec.status} />
                     </div>
 
                     <p className="text-xs font-semibold text-slate-700 line-clamp-1">{rec.diagnosis}</p>
 
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-100">
-                      <span>{rec.examDate}</span>
-                      <span>BS: {rec.doctorName}</span>
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-100 font-mono">
+                      <span>{rec.medicalRecordCode}</span>
+                      <span>{rec.createdAt.slice(0, 10)}</span>
                     </div>
                   </div>
                 );
@@ -97,181 +185,116 @@ export const MedicalRecordDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: Record Detail View */}
-        <div className="lg:col-span-8">
+        {/* Right Column: Record Detail Form View */}
+        <div className="lg:col-span-8 min-w-0">
           {selectedRecord ? (
             <Card
-              title={
-                <div className="flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5 text-blue-700" />
-                  <span>Bệnh Án Điện Tử: {selectedRecord.id}</span>
-                </div>
-              }
-              action={
-                <Badge variant="green" dot>
-                  Hồ sơ đã hoàn tất
-                </Badge>
-              }
+              title={`Hồ sơ bệnh án: ${selectedRecord.medicalRecordCode}`}
+              subtitle={`Bệnh nhân: ${selectedRecord.patientName || 'Chưa có thông tin'} • Bác sĩ điều trị: ${selectedRecord.doctorName || 'Chưa cập nhật'}`}
+              action={<StatusBadge type="medicalRecord" status={selectedRecord.status} />}
             >
-              <div className="space-y-6 text-xs text-slate-700">
-                {/* Patient administrative header */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Bệnh nhân:</span>
-                    <span className="font-bold text-slate-900 text-sm">{selectedRecord.patientName}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Giới tính / Ngày sinh:</span>
-                    <span className="font-semibold text-slate-800">
-                      {selectedRecord.gender} • {selectedRecord.birthDate}
+              <div className="space-y-5 text-xs">
+                {isFinalized && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-emerald-700 shrink-0" />
+                    <span>
+                      Hồ sơ bệnh án đã được ký số và hoàn tất vào lúc <strong>{selectedRecord.finalizedAt || selectedRecord.updatedAt}</strong>. Toàn bộ thông tin đã được khóa bảo mật và không thể chỉnh sửa.
                     </span>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Mã bệnh nhân:</span>
-                    <span className="font-mono font-bold text-blue-700">{selectedRecord.patientId}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Bác sĩ phụ trách:</span>
-                    <span className="font-semibold text-slate-800">{selectedRecord.doctorName}</span>
-                  </div>
+                )}
+
+                {/* 1. Diagnosis */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 text-xs block">
+                    1. Chẩn đoán xác định *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={isFinalized}
+                    value={diagnosis}
+                    onChange={(e) => setDiagnosis(e.target.value)}
+                    placeholder="Ví dụ: Viêm mũi xoang cấp mủ / Viêm tai giữa thanh dịch..."
+                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-600 font-bold"
+                  />
                 </div>
 
-                {/* Complaint and History */}
-                <div className="space-y-2">
-                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-blue-800">
-                    1. Lý do khám & Diễn biến bệnh sử
-                  </h4>
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
-                    <p><strong>Lý do vào viện:</strong> {selectedRecord.chiefComplaint}</p>
-                    <p className="text-slate-600"><strong>Bệnh sử & tiền sử:</strong> {selectedRecord.medicalHistory}</p>
-                  </div>
+                {/* 2. Conclusion */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 text-xs block">
+                    2. Kết luận chuyên môn
+                  </label>
+                  <textarea
+                    rows={2}
+                    disabled={isFinalized}
+                    value={conclusion}
+                    onChange={(e) => setConclusion(e.target.value)}
+                    placeholder="Nhận định lâm sàng, mức độ tổn thương thực thể..."
+                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-600"
+                  />
                 </div>
 
-                {/* Exam Findings */}
-                <div className="space-y-2">
-                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-blue-800">
-                    2. Kết quả thăm khám Tai Mũi Họng lâm sàng
-                  </h4>
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1.5 leading-relaxed">
-                    <p>{selectedRecord.examinationSummary}</p>
-                    {selectedRecord.endoscopySummary && (
-                      <p className="text-blue-900 bg-blue-50/70 p-2.5 rounded-lg border border-blue-100 font-medium">
-                        <strong>Nội soi NBI:</strong> {selectedRecord.endoscopySummary}
-                      </p>
-                    )}
-                  </div>
+                {/* 3. Treatment Plan */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 text-xs block">
+                    3. Kế hoạch điều trị & Can thiệp
+                  </label>
+                  <textarea
+                    rows={2}
+                    disabled={isFinalized}
+                    value={treatmentPlan}
+                    onChange={(e) => setTreatmentPlan(e.target.value)}
+                    placeholder="Phác đồ kháng sinh, kháng viêm, khí dung, rửa mũi xoang..."
+                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-600"
+                  />
                 </div>
 
-                {/* Diagnosis & Treatment */}
-                <div className="space-y-2">
-                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-blue-800">
-                    3. Chẩn đoán kết luận & Phác đồ điều trị
-                  </h4>
-                  <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-1.5 text-emerald-950">
-                    <p className="text-sm font-bold text-emerald-900">
-                      Chẩn đoán: {selectedRecord.diagnosis}{' '}
-                      {selectedRecord.icdCode && (
-                        <span className="text-xs font-mono font-bold bg-emerald-100 px-2 py-0.5 rounded text-emerald-800">
-                          Mã ICD-10: {selectedRecord.icdCode}
-                        </span>
-                      )}
-                    </p>
-                    <p>
-                      <strong>Hướng điều trị:</strong> {selectedRecord.treatmentPlan}
-                    </p>
-                    {selectedRecord.followUpDate && (
-                      <p className="font-bold text-blue-800 pt-1">
-                        📅 Hẹn tái khám: {selectedRecord.followUpDate}
-                      </p>
-                    )}
-                  </div>
+                {/* 4. Doctor Advice */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 text-xs block">
+                    4. Lời dặn dò của Bác sĩ
+                  </label>
+                  <textarea
+                    rows={2}
+                    disabled={isFinalized}
+                    value={doctorAdvice}
+                    onChange={(e) => setDoctorAdvice(e.target.value)}
+                    placeholder="Uống thuốc đúng giờ, súc họng nước muối, đeo khẩu trang..."
+                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-600 italic"
+                  />
                 </div>
 
-                {/* Actions Footer */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                  <span className="text-[11px] text-slate-400">
-                    Hồ sơ lưu trữ điện tử lúc: {selectedRecord.createdAt}
-                  </span>
-                  <div className="flex gap-2">
-                    <Link to={`/doctor/prescriptions?receptionId=${selectedRecord.receptionId}`}>
-                      <Button size="sm" variant="outline" leftIcon={<Pill className="h-4 w-4" />}>
-                        Đơn thuốc liên kết (UC-12)
-                      </Button>
-                    </Link>
-                  </div>
+                {/* 5. Follow-up Date */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 text-xs block">
+                    5. Lịch hẹn tái khám
+                  </label>
+                  <input
+                    type="date"
+                    disabled={isFinalized}
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    className="p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-600"
+                  />
                 </div>
+
+                {/* Action Buttons if Draft */}
+                {!isFinalized && (
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                    <Button variant="outline" onClick={handleSaveDraft} leftIcon={<Save className="h-4 w-4" />}>
+                      Lưu bản nháp
+                    </Button>
+                    <Button variant="success" onClick={handleFinalize} leftIcon={<CheckCircle2 className="h-4 w-4" />}>
+                      Ký số & Hoàn tất bệnh án
+                    </Button>
+                  </div>
+                )}
               </div>
             </Card>
           ) : (
-            <Card>
-              <p className="text-center py-10 text-xs text-slate-400">Vui lòng chọn một hồ sơ bệnh án bên trái để xem chi tiết.</p>
-            </Card>
+            <p className="text-center py-12 text-slate-400 text-xs">Vui lòng chọn một bệnh án để xem chi tiết.</p>
           )}
         </div>
       </div>
-
-      {/* MODAL: Print Medical Record */}
-      <Modal
-        isOpen={isPrintModalOpen}
-        onClose={() => setIsPrintModalOpen(false)}
-        title="Bệnh Án Điện Tử Tóm Tắt (Medical Record Slip)"
-        maxWidth="2xl"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setIsPrintModalOpen(false)}>
-              Đóng
-            </Button>
-            <Button variant="primary" onClick={() => window.print()} leftIcon={<Printer className="h-4 w-4" />}>
-              In bệnh án
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4 text-xs font-sans p-2">
-          <div className="text-center border-b border-slate-200 pb-3 space-y-1">
-            <h3 className="font-extrabold text-sm text-slate-900 uppercase">
-              Phòng Khám Chuyên Khoa Tai Mũi Họng
-            </h3>
-            <p className="text-[11px] text-slate-500">125 Giải Phóng, Q. Đống Đa, Hà Nội • Điện thoại: 1900 8899</p>
-            <h4 className="font-black text-base text-blue-900 pt-2">PHIẾU KẾT QUẢ KHÁM BỆNH</h4>
-            <p className="text-[11px] font-mono text-slate-400">Số BA: {selectedRecord?.id}</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 text-slate-700">
-            <p><strong>Họ tên:</strong> {selectedRecord?.patientName}</p>
-            <p><strong>Mã BN:</strong> {selectedRecord?.patientId}</p>
-            <p><strong>Ngày sinh / Giới tính:</strong> {selectedRecord?.birthDate} ({selectedRecord?.gender})</p>
-            <p><strong>Ngày khám:</strong> {selectedRecord?.examDate}</p>
-            <p className="col-span-2"><strong>Lý do đến khám:</strong> {selectedRecord?.chiefComplaint}</p>
-          </div>
-
-          <div className="space-y-1.5 border-t border-slate-200 pt-2">
-            <p><strong>Khám lâm sàng TMH:</strong> {selectedRecord?.examinationSummary}</p>
-            {selectedRecord?.endoscopySummary && (
-              <p><strong>Kết quả nội soi:</strong> {selectedRecord?.endoscopySummary}</p>
-            )}
-            <p className="text-sm font-bold text-slate-900 pt-1">
-              Chẩn đoán: {selectedRecord?.diagnosis} ({selectedRecord?.icdCode})
-            </p>
-            <p><strong>Hướng điều trị:</strong> {selectedRecord?.treatmentPlan}</p>
-            {selectedRecord?.followUpDate && (
-              <p className="font-bold">Hẹn tái khám ngày: {selectedRecord?.followUpDate}</p>
-            )}
-          </div>
-
-          <div className="flex justify-between pt-8 text-center text-xs">
-            <div>
-              <p className="font-bold">Bệnh nhân / Người nhà</p>
-              <p className="text-slate-400 text-[10px] italic mt-8">(Ký và ghi rõ họ tên)</p>
-            </div>
-            <div>
-              <p className="font-bold">Bác sĩ khám bệnh</p>
-              <p className="text-blue-700 font-semibold mt-8">{selectedRecord?.doctorName}</p>
-            </div>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 };
-

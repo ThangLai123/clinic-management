@@ -1,83 +1,83 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import {
   UserCheck,
   Search,
   Plus,
   Calendar,
-  AlertTriangle,
-  HeartPulse,
-  DoorOpen,
   CheckCircle2,
   Users,
+  Clock,
+  ArrowRight,
+  ShieldAlert,
+  Activity,
+  Phone,
+  FileText,
 } from 'lucide-react';
 import { Topbar } from '../../../components/shared/Topbar';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
-import { Textarea } from '../../../components/ui/Textarea';
-import { Badge } from '../../../components/ui/Badge';
 import { Modal } from '../../../components/ui/Modal';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { useClinicStore } from '../../../mock/clinicStore';
-import type { ReceptionPriority, Patient } from '../../../types/clinic';
+import type { Patient, Gender, ReceptionType } from '../../../types/clinic';
+import { GENDER_MAP, RECEPTION_TYPE_MAP } from '../../../types/database';
 
 export const PatientReceptionPage: React.FC = () => {
   const store = useClinicStore();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fromAptId = searchParams.get('fromApt');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Form states for Reception
-  const [selectedPatientId, setSelectedPatientId] = useState('');
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-
-  // New patient inputs if creating fresh
+  // Mode: existing patient vs new patient
   const [isNewPatient, setIsNewPatient] = useState(false);
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+
+  // New Patient Form fields (Bảng patients)
   const [newFullName, setNewFullName] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newBirthDate, setNewBirthDate] = useState('1990-01-01');
-  const [newGender, setNewGender] = useState<'Nam' | 'Nữ' | 'Khác'>('Nam');
+  const [newGender, setNewGender] = useState<Gender>('MALE');
   const [newAddress, setNewAddress] = useState('');
-  const [newAllergies, setNewAllergies] = useState('');
+  const [newOccupation, setNewOccupation] = useState('');
+  const [newInsuranceNumber, setNewInsuranceNumber] = useState('');
+  const [newAllergyNotes, setNewAllergyNotes] = useState('');
+  const [newMedicalHistoryNotes, setNewMedicalHistoryNotes] = useState('');
+  const [newEmergencyContactName, setNewEmergencyContactName] = useState('');
+  const [newEmergencyContactPhone, setNewEmergencyContactPhone] = useState('');
 
-  // Clinical & Triage info
-  const [receptionType, setReceptionType] = useState<'DAT_LICH' | 'TRUC_TIEP'>('TRUC_TIEP');
-  const [appointmentId, setAppointmentId] = useState<string | undefined>(undefined);
-  const [reason, setReason] = useState('');
-  const [symptoms, setSymptoms] = useState('Nghẹt mũi, đau họng');
-  const [priority, setPriority] = useState<ReceptionPriority>('BINH_THUONG');
+  // Reception fields (Bảng receptions)
+  const [receptionType, setReceptionType] = useState<ReceptionType>('WALK_IN');
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
+  const [receptionNotes, setReceptionNotes] = useState('Đau rát họng, ngứa tai');
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('1'); // Default to ENT initial exam
 
-  // Vital signs
-  const [pulse, setPulse] = useState(76);
-  const [bloodPressure, setBloodPressure] = useState('120/80');
-  const [temperature, setTemperature] = useState(36.8);
-  const [spO2, setSpO2] = useState(99);
-
-  // Auto-fill from appointment if navigated from URL
+  // Pre-fill if navigated from Appointments page
   useEffect(() => {
     if (fromAptId) {
       const apt = store.appointments.find((a) => a.id === fromAptId);
       if (apt) {
-        setReceptionType('DAT_LICH');
-        setAppointmentId(apt.id);
-        setReason(apt.reason);
-        setSymptoms(apt.symptoms.join(', '));
+        setReceptionType('APPOINTMENT');
+        setSelectedAppointmentId(apt.id);
+        setReceptionNotes(apt.reason || apt.symptoms || 'Khám theo lịch hẹn');
 
-        // Find or prepare patient
-        const existing = store.patients.find((p) => p.phoneNumber === apt.phoneNumber);
+        // Look for existing patient with this phone
+        const existing = store.patients.find((p) => p.phone === (apt.phoneNumber || apt.phone));
         if (existing) {
-          setSelectedPatient(existing);
           setSelectedPatientId(existing.id);
+          setIsNewPatient(false);
         } else {
           setIsNewPatient(true);
-          setNewFullName(apt.patientName);
-          setNewPhone(apt.phoneNumber);
+          setNewFullName(apt.patientName || apt.fullName || '');
+          setNewPhone(apt.phoneNumber || apt.phone || '');
           if (apt.birthDate) setNewBirthDate(apt.birthDate);
-          if (apt.gender) setNewGender(apt.gender);
+          if (apt.gender) setNewGender(apt.gender as Gender);
           if (apt.address) setNewAddress(apt.address);
         }
         setIsModalOpen(true);
@@ -85,143 +85,203 @@ export const PatientReceptionPage: React.FC = () => {
     }
   }, [fromAptId, store.appointments, store.patients]);
 
-  const handleOpenNewReception = () => {
+  const handleOpenWalkIn = () => {
     setIsNewPatient(false);
+    setSelectedAppointmentId(null);
+    setReceptionType('WALK_IN');
     setSelectedPatientId(store.patients[0]?.id || '');
-    setSelectedPatient(store.patients[0] || null);
-    setReceptionType('TRUC_TIEP');
-    setAppointmentId(undefined);
-    setReason('');
+    setReceptionNotes('Khám chuyên khoa Tai Mũi Họng trực tiếp');
     setIsModalOpen(true);
   };
 
-  const handlePatientSelectChange = (patientId: string) => {
-    setSelectedPatientId(patientId);
-    const p = store.patients.find((item) => item.id === patientId);
-    setSelectedPatient(p || null);
+  const handleOpenFromApt = (apt: any) => {
+    setReceptionType('APPOINTMENT');
+    setSelectedAppointmentId(apt.id);
+    setReceptionNotes(apt.reason || apt.symptoms.join(', ') || 'Khám theo lịch hẹn');
+
+    const existing = store.patients.find((p) => p.phone === apt.phoneNumber);
+    if (existing) {
+      setSelectedPatientId(existing.id);
+      setIsNewPatient(false);
+    } else {
+      setIsNewPatient(true);
+      setNewFullName(apt.patientName);
+      setNewPhone(apt.phoneNumber);
+      if (apt.birthDate) setNewBirthDate(apt.birthDate);
+      if (apt.gender) setNewGender(apt.gender as Gender);
+      if (apt.address) setNewAddress(apt.address || '');
+    }
+    setIsModalOpen(true);
   };
 
   const handleConfirmReception = () => {
-    let finalPatient: Patient;
+    let finalPatientId = selectedPatientId;
 
     if (isNewPatient) {
-      if (!newFullName.trim() || !newPhone.trim()) return;
-      finalPatient = store.addPatient({
+      if (!newFullName.trim() || !newPhone.trim()) {
+        alert('Vui lòng điền Họ tên và Số điện thoại của người bệnh.');
+        return;
+      }
+
+      const createdPatient = store.addPatient({
         fullName: newFullName.trim(),
-        phoneNumber: newPhone.trim(),
-        birthDate: newBirthDate,
+        phone: newPhone.trim(),
+        birthDate: newBirthDate || undefined,
         gender: newGender,
         address: newAddress.trim() || undefined,
-        allergies: newAllergies ? newAllergies.split(',').map((s) => s.trim()) : undefined,
+        occupation: newOccupation.trim() || undefined,
+        insuranceNumber: newInsuranceNumber.trim() || undefined,
+        allergyNotes: newAllergyNotes.trim() || undefined,
+        medicalHistoryNotes: newMedicalHistoryNotes.trim() || undefined,
+        emergencyContactName: newEmergencyContactName.trim() || undefined,
+        emergencyContactPhone: newEmergencyContactPhone.trim() || undefined,
       });
-    } else {
-      if (!selectedPatient) return;
-      finalPatient = selectedPatient;
+
+      finalPatientId = createdPatient.id;
     }
 
-    store.addReception({
-      patientId: finalPatient.id,
-      patientName: finalPatient.fullName,
-      phoneNumber: finalPatient.phoneNumber,
-      appointmentId,
+    if (!finalPatientId) {
+      alert('Vui lòng chọn hoặc nhập hồ sơ bệnh nhân.');
+      return;
+    }
+
+    // 1. Create reception in receptions table
+    const reception = store.addReception({
+      patientId: finalPatientId,
+      appointmentId: selectedAppointmentId,
       receptionType,
-      reason: reason.trim() || 'Khám Tai Mũi Họng tổng quát',
-      symptoms: symptoms.split(',').map((s) => s.trim()).filter(Boolean),
-      priority,
-      vitalSigns: {
-        pulse,
-        bloodPressure,
-        temperature,
-        spO2,
-      },
+      notes: receptionNotes,
+      receivedByStaffId: '3', // Lễ tân Hoàng Thu Trang
     });
 
+    // 2. Add initial service if selected (Bảng visit_services)
+    if (selectedServiceId) {
+      const svc = store.clinicalServices.find((s) => s.id === selectedServiceId);
+      if (svc) {
+        store.addVisitService({
+          receptionId: reception.id,
+          clinicalServiceId: svc.id,
+          serviceCode: svc.serviceCode,
+          serviceName: svc.serviceName,
+          unitPrice: svc.price,
+          quantity: 1,
+        });
+      }
+    }
+
     setIsModalOpen(false);
+    navigate('/receptionist/queue');
   };
 
-  // Receptions in waiting queue
-  const recentReceptions = store.receptions.filter(
-    (r) => r.status === 'CHO_PHAN_PHONG' || r.status === 'CHO_KHAM'
-  );
+  // Filtered patients for dropdown/search
+  const filteredPatients = store.patients.filter((p) => {
+    if (!patientSearchQuery) return true;
+    const q = patientSearchQuery.toLowerCase();
+    return (
+      (p.fullName || '').toLowerCase().includes(q) ||
+      (p.phone || '').includes(q) ||
+      p.patientCode.toLowerCase().includes(q)
+    );
+  });
+
+  const selectedPatientObj = store.patients.find((p) => p.id === selectedPatientId);
+
+  // Today's receptions
+  const todayReceptions = store.receptions.filter((r) => {
+    if (!searchTerm) return true;
+    const q = searchTerm.toLowerCase();
+    return (
+      (r.patientName || '').toLowerCase().includes(q) ||
+      r.receptionCode.toLowerCase().includes(q) ||
+      (r.patient?.phone && r.patient.phone.includes(q))
+    );
+  });
+
+  // Confirmed appointments waiting for arrival
+  const waitingAppointments = store.appointments.filter((a) => a.status === 'CONFIRMED');
 
   return (
     <div className="space-y-6">
       <Topbar
-        title="Tiếp Nhận & Đón Tiếp Bệnh Nhân"
-        subtitle="Use Case 04: Đăng ký khám trực tiếp, tiếp nhận lịch hẹn online, phân loại ưu tiên và đo dấu hiệu sinh tồn."
+        title="Tiếp nhận bệnh nhân"
+        subtitle="Xác nhận người có lịch hẹn hoặc đăng ký khám trực tiếp."
         actions={
-          <Button onClick={handleOpenNewReception} leftIcon={<Plus className="h-4 w-4" />}>
-            Lập phiếu tiếp nhận mới
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/receptionist/queue">
+              <Button size="sm" variant="outline" leftIcon={<Clock className="h-4 w-4" />}>
+                Hàng chờ
+              </Button>
+            </Link>
+            <Button size="sm" onClick={handleOpenWalkIn} leftIcon={<Plus className="h-4 w-4" />}>
+              Tiếp nhận trực tiếp
+            </Button>
+          </div>
         }
       />
 
       {/* Grid: Pending Appointments & Today's Receptions */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Receptions List */}
-        <div className="lg:col-span-8 space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left Column: Today's Receptions List */}
+        <div className="lg:col-span-8 min-w-0 space-y-3">
           <Card
-            title={`Danh sách bệnh nhân vừa tiếp nhận hôm nay (${recentReceptions.length})`}
-            subtitle="Các lượt tiếp nhận đang chờ lễ tân phân buồng khám hoặc đang chờ bác sĩ khám"
+            title={`Tiếp nhận hôm nay (${todayReceptions.length})`}
+            subtitle="Danh sách bệnh nhân đã làm thủ tục."
+            action={
+              <div className="relative w-full sm:w-52">
+                <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-2" />
+                <input
+                  type="text"
+                  placeholder="Tìm tên, mã tiếp nhận..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none"
+                />
+              </div>
+            }
           >
-            {recentReceptions.length === 0 ? (
+            {todayReceptions.length === 0 ? (
               <p className="py-8 text-center text-xs text-slate-400">
-                Chưa có lượt tiếp nhận nào trong hàng đợi. Nhấn "Lập phiếu tiếp nhận mới" để đón tiếp bệnh nhân.
+                Chưa có lượt tiếp nhận nào hôm nay.
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                <table className="w-full min-w-[670px] text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
                     <tr>
                       <th className="py-2.5 px-3">Mã TN / Giờ</th>
                       <th className="py-2.5 px-3">Họ Tên & SĐT</th>
-                      <th className="py-2.5 px-3">Hình thức</th>
-                      <th className="py-2.5 px-3">Ưu tiên</th>
-                      <th className="py-2.5 px-3">Trạng thái</th>
-                      <th className="py-2.5 px-3 text-center">Thao tác</th>
+                      <th className="py-2.5 px-3 text-center">Hình thức</th>
+                      <th className="py-2.5 px-3">Ghi chú tiếp nhận</th>
+                      <th className="py-2.5 px-3 text-center">Trạng thái</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {recentReceptions.map((rec) => (
+                    {todayReceptions.map((rec) => (
                       <tr key={rec.id} className="hover:bg-slate-50/60">
-                        <td className="py-3 px-3">
-                          <span className="font-mono font-bold text-blue-700 block">{rec.id}</span>
-                          <span className="text-[11px] text-slate-400">{rec.receptionTime}</span>
+                        <td className="py-2.5 px-3">
+                          <span className="font-mono font-bold text-blue-700 block">
+                            {rec.receptionCode}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {rec.receivedAt ? rec.receivedAt.slice(11, 16) : '--:--'}
+                          </span>
                         </td>
                         <td className="py-3 px-3">
-                          <span className="font-bold text-slate-900 block">{rec.patientName}</span>
-                          <span className="text-[11px] text-slate-500">{rec.phoneNumber}</span>
-                        </td>
-                        <td className="py-3 px-3">
-                          {rec.receptionType === 'DAT_LICH' ? (
-                            <Badge variant="blue">Có lịch hẹn</Badge>
-                          ) : (
-                            <Badge variant="slate">Khám trực tiếp</Badge>
-                          )}
-                        </td>
-                        <td className="py-3 px-3">
-                          <StatusBadge type="priority" value={rec.priority} />
-                        </td>
-                        <td className="py-3 px-3">
-                          <StatusBadge type="reception" value={rec.status} />
-                          {rec.assignedDoctorName && (
-                            <span className="block text-[10px] text-slate-500 mt-0.5">
-                              {rec.assignedDoctorName}
-                            </span>
-                          )}
+                          <span className="font-bold text-slate-900 block">{rec.patientName || 'Chưa có thông tin'}</span>
+                          <span className="text-[11px] text-slate-500">
+                            {rec.patient?.phone || 'Chưa cập nhật'}
+                          </span>
                         </td>
                         <td className="py-3 px-3 text-center">
-                          {rec.status === 'CHO_PHAN_PHONG' ? (
-                            <Link to="/receptionist/room-assignment">
-                              <Button size="sm" variant="outline" className="text-[11px]">
-                                Phân phòng (UC-06)
-                              </Button>
-                            </Link>
-                          ) : (
-                            <span className="text-[11px] text-emerald-700 font-medium">
-                              Đã gán {rec.assignedRoomId}
-                            </span>
-                          )}
+                          <StatusBadge type="receptionType" status={rec.receptionType} />
+                        </td>
+                        <td className="py-3 px-3 max-w-xs">
+                          <p className="text-slate-700 line-clamp-1">
+                            {rec.notes || 'Khám chuyên khoa Tai Mũi Họng'}
+                          </p>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <StatusBadge type="reception" status={rec.status} />
                         </td>
                       </tr>
                     ))}
@@ -232,42 +292,50 @@ export const PatientReceptionPage: React.FC = () => {
           </Card>
         </div>
 
-        {/* Right: Online Appointments waiting check-in */}
-        <div className="lg:col-span-4 space-y-4">
+        {/* Right Column: Confirmed Appointments Waiting for Check-in */}
+        <div className="lg:col-span-4 min-w-0 space-y-3">
           <Card
-            title="Lịch hẹn trực tuyến chờ đón tiếp"
-            subtitle="Bệnh nhân đặt trước qua website (UC-01)"
+            title={`Lịch hẹn chờ đến (${waitingAppointments.length})`}
+            subtitle="Lịch đã xác nhận, chưa tiếp nhận."
           >
-            <div className="space-y-3">
-              {store.appointments
-                .filter((a) => a.status === 'DA_XAC_NHAN' || a.status === 'CHO_XAC_NHAN')
-                .map((apt) => (
+            {waitingAppointments.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center">
+                Không có lịch hẹn nào đang chờ tiếp nhận.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {waitingAppointments.map((apt) => (
                   <div
                     key={apt.id}
-                    className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5"
+                    className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-1 hover:border-blue-300 transition-all"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900">{apt.patientName}</span>
-                      <span className="font-mono text-[10px] text-blue-700 font-bold">{apt.timeSlot}</span>
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <span className="font-bold text-slate-900">{apt.fullName || apt.patientName || 'Chưa có thông tin'}</span>
+                      <span className="font-mono text-[10px] text-blue-700 font-bold bg-blue-100/60 px-1.5 py-0.5 rounded">
+                        {apt.timeSlot}
+                      </span>
                     </div>
-                    <p className="text-slate-500 text-[11px]">{apt.phoneNumber} • {apt.appointmentDate}</p>
-                    <p className="text-slate-600 italic line-clamp-1">"{apt.reason}"</p>
+                    <p className="text-slate-500 text-[11px]">
+                      {apt.phone || apt.phoneNumber || 'Chưa cập nhật'} • {apt.appointmentDate}
+                    </p>
+                    <p className="text-slate-600 italic line-clamp-1">
+                      "{apt.reason || apt.symptoms || 'Khám TMH'}"
+                    </p>
 
-                    <div className="pt-2 flex justify-end">
+                    <div className="pt-1.5 flex justify-end">
                       <Button
                         size="sm"
                         variant="primary"
-                        onClick={() => {
-                          setFromAppointment(apt);
-                          setIsModalOpen(true);
-                        }}
+                        onClick={() => handleOpenFromApt(apt)}
+                        leftIcon={<UserCheck className="h-3.5 w-3.5" />}
                       >
-                        Tiếp nhận ca này
+                        Tiếp nhận
                       </Button>
                     </div>
                   </div>
                 ))}
-            </div>
+              </div>
+            )}
           </Card>
         </div>
       </div>
@@ -276,8 +344,12 @@ export const PatientReceptionPage: React.FC = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Lập Phiếu Tiếp Nhận Bệnh Nhân (Check-in)"
-        subtitle="Nhập thông tin người bệnh, đo dấu hiệu sinh tồn và phân loại mức độ khẩn cấp"
+        title="Tiếp nhận bệnh nhân"
+        subtitle={
+          receptionType === 'APPOINTMENT'
+            ? 'Tiếp nhận người bệnh đã có lịch hẹn trước'
+            : 'Đăng ký tiếp nhận người bệnh đến khám trực tiếp'
+        }
         maxWidth="2xl"
         footer={
           <>
@@ -285,71 +357,80 @@ export const PatientReceptionPage: React.FC = () => {
               Hủy bỏ
             </Button>
             <Button onClick={handleConfirmReception} variant="primary">
-              Xác nhận tiếp nhận & Chuyển phân buồng
+              Xác nhận tiếp nhận & Vào hàng chờ
             </Button>
           </>
         }
       >
         <div className="space-y-5 text-xs">
-          {/* Section 1: Patient source */}
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+          {/* Section 1: Reception Source Mode */}
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer font-medium">
                 <input
                   type="radio"
-                  name="source"
+                  name="sourceMode"
                   checked={!isNewPatient}
                   onChange={() => setIsNewPatient(false)}
                 />
-                Chọn bệnh nhân đã có hồ sơ
+                Chọn hồ sơ bệnh nhân có sẵn
               </label>
               <label className="flex items-center gap-2 cursor-pointer font-medium">
                 <input
                   type="radio"
-                  name="source"
+                  name="sourceMode"
                   checked={isNewPatient}
                   onChange={() => setIsNewPatient(true)}
                 />
-                Đăng ký hồ sơ mới
+                Tạo hồ sơ bệnh nhân mới
               </label>
             </div>
-            <span className="text-[11px] font-bold text-blue-700">
-              {receptionType === 'DAT_LICH' ? 'Có lịch hẹn trước' : 'Đến khám trực tiếp'}
+            <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+              {RECEPTION_TYPE_MAP[receptionType].label}
             </span>
           </div>
 
+          {/* Section 2: Patient Selector OR Creation Form */}
           {!isNewPatient ? (
             <div className="space-y-3">
+              <Input
+                label="Tìm kiếm bệnh nhân (Tên, SĐT, Mã BN)"
+                value={patientSearchQuery}
+                onChange={(e) => setPatientSearchQuery(e.target.value)}
+                placeholder="Nhập tên hoặc số điện thoại..."
+                leftIcon={<Search className="h-4 w-4" />}
+              />
+
               <Select
-                label="Chọn hồ sơ bệnh nhân trong hệ thống"
+                label="Chọn bệnh nhân trong danh sách khớp"
                 value={selectedPatientId}
-                onChange={(e) => handlePatientSelectChange(e.target.value)}
-                options={store.patients.map((p) => ({
+                onChange={(e) => setSelectedPatientId(e.target.value)}
+                options={filteredPatients.map((p) => ({
                   value: p.id,
-                  label: `${p.fullName} - SĐT: ${p.phoneNumber} (Mã: ${p.id})`,
+                  label: `${p.fullName} - SĐT: ${p.phone} (${p.patientCode})`,
                 }))}
               />
 
-              {selectedPatient && (
+              {selectedPatientObj && (
                 <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 grid grid-cols-2 gap-2 text-xs">
-                  <p><strong>Ngày sinh:</strong> {selectedPatient.birthDate}</p>
-                  <p><strong>Giới tính:</strong> {selectedPatient.gender}</p>
-                  <p className="col-span-2"><strong>Địa chỉ:</strong> {selectedPatient.address || 'Chưa cập nhật'}</p>
+                  <p><strong>Ngày sinh:</strong> {selectedPatientObj.birthDate || 'Chưa cập nhật'}</p>
+                  <p><strong>Giới tính:</strong> {GENDER_MAP[selectedPatientObj.gender]}</p>
+                  <p className="col-span-2"><strong>Địa chỉ:</strong> {selectedPatientObj.address || 'Chưa cập nhật'}</p>
                   <p className="col-span-2 text-rose-700">
-                    <strong>Tiền sử dị ứng:</strong> {selectedPatient.allergies?.join(', ') || 'Không ghi nhận'}
+                    <strong>Tiền sử dị ứng:</strong> {selectedPatientObj.allergyNotes || 'Không ghi nhận'}
                   </p>
                 </div>
               )}
             </div>
           ) : (
             <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <h4 className="font-bold text-slate-800 text-xs">Đăng ký thông tin hành chính mới:</h4>
-              <div className="grid grid-cols-2 gap-3">
+              <h4 className="font-bold text-slate-800 text-xs">Đăng ký thông tin hành chính người bệnh:</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   label="Họ và tên"
                   value={newFullName}
                   onChange={(e) => setNewFullName(e.target.value)}
-                  placeholder="Ví dụ: Hoàng Văn Tuấn"
+                  placeholder="Ví dụ: Nguyễn Văn An"
                   required
                 />
                 <Input
@@ -360,7 +441,8 @@ export const PatientReceptionPage: React.FC = () => {
                   required
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   label="Ngày sinh"
                   type="date"
@@ -370,116 +452,90 @@ export const PatientReceptionPage: React.FC = () => {
                 <Select
                   label="Giới tính"
                   value={newGender}
-                  onChange={(e) => setNewGender(e.target.value as any)}
+                  onChange={(e) => setNewGender(e.target.value as Gender)}
                   options={[
-                    { value: 'Nam', label: 'Nam' },
-                    { value: 'Nữ', label: 'Nữ' },
-                    { value: 'Khác', label: 'Khác' },
+                    { value: 'MALE', label: 'Nam' },
+                    { value: 'FEMALE', label: 'Nữ' },
+                    { value: 'OTHER', label: 'Khác' },
+                    { value: 'UNSPECIFIED', label: 'Chưa xác định' },
                   ]}
                 />
               </div>
-              <Input
-                label="Địa chỉ cư trú"
-                value={newAddress}
-                onChange={(e) => setNewAddress(e.target.value)}
-                placeholder="Số nhà, đường, quận/huyện..."
-              />
-              <Input
-                label="Tiền sử dị ứng thuốc / thức ăn (nếu có)"
-                value={newAllergies}
-                onChange={(e) => setNewAllergies(e.target.value)}
-                placeholder="Ví dụ: Dị ứng Penicillin, Paracetamol..."
-              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Địa chỉ thường trú"
+                  value={newAddress}
+                  onChange={(e) => setNewAddress(e.target.value)}
+                  placeholder="Số nhà, đường, quận/huyện..."
+                />
+                <Input
+                  label="Nghề nghiệp"
+                  value={newOccupation}
+                  onChange={(e) => setNewOccupation(e.target.value)}
+                  placeholder="Ví dụ: Giáo viên, Kỹ sư..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Mã thẻ BHYT (nếu có)"
+                  value={newInsuranceNumber}
+                  onChange={(e) => setNewInsuranceNumber(e.target.value)}
+                  placeholder="GD401..."
+                />
+                <Input
+                  label="Tiền sử dị ứng (nếu có)"
+                  value={newAllergyNotes}
+                  onChange={(e) => setNewAllergyNotes(e.target.value)}
+                  placeholder="Dị ứng Penicillin, tôm cua..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Người liên hệ khẩn cấp"
+                  value={newEmergencyContactName}
+                  onChange={(e) => setNewEmergencyContactName(e.target.value)}
+                  placeholder="Họ tên người thân"
+                />
+                <Input
+                  label="SĐT người thân"
+                  value={newEmergencyContactPhone}
+                  onChange={(e) => setNewEmergencyContactPhone(e.target.value)}
+                  placeholder="09..."
+                />
+              </div>
             </div>
           )}
 
-          {/* Section 2: Medical reason & Triage priority */}
+          {/* Section 3: Reception Notes & Initial Clinical Service */}
           <div className="space-y-3">
             <h4 className="font-bold text-slate-800 text-xs border-b border-slate-100 pb-1">
-              Phân loại & Lý do đến khám:
+              Thông tin tiếp nhận & Dịch vụ khám ban đầu:
             </h4>
-            <div className="grid grid-cols-2 gap-3">
-              <Select
-                label="Mức độ ưu tiên tiếp nhận"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as any)}
-                options={[
-                  { value: 'BINH_THUONG', label: 'Bình thường (Khám theo lượt)' },
-                  { value: 'UU_TIEN', label: 'Ưu tiên (Trẻ em dưới 6t, người cao tuổi, sốt cao)' },
-                  { value: 'CAP_BACH', label: 'Cấp bách (Cần hỗ trợ buồng khám ngay)' },
-                ]}
-              />
-              <Input
-                label="Lý do đến khám"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Ví dụ: Đau rát họng, ù tai trái, nghẹt mũi..."
-              />
-            </div>
-            <Input
-              label="Triệu chứng ban đầu ghi nhận"
-              value={symptoms}
-              onChange={(e) => setSymptoms(e.target.value)}
-              placeholder="Cách nhau bởi dấu phẩy"
-            />
-          </div>
 
-          {/* Section 3: Vital Signs */}
-          <div className="space-y-3 p-4 bg-emerald-50/50 rounded-xl border border-emerald-200">
-            <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs">
-              <HeartPulse className="h-4 w-4 text-emerald-700" />
-              <span>Dấu hiệu sinh tồn đo tại bàn tiếp nhận:</span>
-            </div>
-            <div className="grid grid-cols-4 gap-3">
-              <Input
-                label="Mạch (lần/ph)"
-                type="number"
-                value={pulse}
-                onChange={(e) => setPulse(Number(e.target.value))}
-              />
-              <Input
-                label="Huyết áp (mmHg)"
-                value={bloodPressure}
-                onChange={(e) => setBloodPressure(e.target.value)}
-                placeholder="120/80"
-              />
-              <Input
-                label="Thân nhiệt (°C)"
-                type="number"
-                step="0.1"
-                value={temperature}
-                onChange={(e) => setTemperature(Number(e.target.value))}
-              />
-              <Input
-                label="SpO2 (%)"
-                type="number"
-                value={spO2}
-                onChange={(e) => setSpO2(Number(e.target.value))}
-              />
-            </div>
+            <Input
+              label="Lý do khám / Triệu chứng ban đầu"
+              value={receptionNotes}
+              onChange={(e) => setReceptionNotes(e.target.value)}
+              placeholder="Ví dụ: Đau rát họng 3 ngày, nghẹt mũi kèm sốt nhẹ..."
+            />
+
+            <Select
+              label="Chỉ định dịch vụ khám ban đầu"
+              value={selectedServiceId}
+              onChange={(e) => setSelectedServiceId(e.target.value)}
+              options={store.clinicalServices
+                .filter((s) => s.status === 'ACTIVE')
+                .map((s) => ({
+                  value: s.id,
+                  label: `${s.serviceName} - ${s.price.toLocaleString('vi-VN')} ₫ (${s.serviceCode})`,
+                }))}
+            />
           </div>
         </div>
       </Modal>
     </div>
   );
-
-  function setFromAppointment(apt: any) {
-    setReceptionType('DAT_LICH');
-    setAppointmentId(apt.id);
-    setReason(apt.reason);
-    setSymptoms(apt.symptoms.join(', '));
-    const existing = store.patients.find((p) => p.phoneNumber === apt.phoneNumber);
-    if (existing) {
-      setSelectedPatient(existing);
-      setSelectedPatientId(existing.id);
-      setIsNewPatient(false);
-    } else {
-      setIsNewPatient(true);
-      setNewFullName(apt.patientName);
-      setNewPhone(apt.phoneNumber);
-      if (apt.birthDate) setNewBirthDate(apt.birthDate);
-      if (apt.gender) setNewGender(apt.gender);
-    }
-  }
 };
-

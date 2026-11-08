@@ -16,9 +16,6 @@ export function PatientLayout() {
         </div>
         <nav style={{ display: 'flex', gap: '16px' }}>
           <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 600 }}>Trang chủ</Link>
-          <Link to="/doctor" style={{ color: '#bae6fd', textDecoration: 'none' }}>Khu vực Bác sĩ</Link>
-          <Link to="/receptionist" style={{ color: '#bae6fd', textDecoration: 'none' }}>Khu vực Lễ tân</Link>
-          <Link to="/admin" style={{ color: '#bae6fd', textDecoration: 'none' }}>Quản trị hệ thống</Link>
         </nav>
       </header>
 

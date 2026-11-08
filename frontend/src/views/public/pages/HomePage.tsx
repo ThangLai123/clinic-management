@@ -66,17 +66,17 @@ export const HomePage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-16 pb-16">
+    <div className="space-y-12 pb-12">
       {/* Hero Section */}
-      <section className="bg-gradient-to-b from-blue-50/70 via-white to-[#F7F8FA] border-b border-slate-200/60 pt-12 pb-16">
+      <section className="bg-gradient-to-b from-blue-50/70 via-white to-[#F7F8FA] border-b border-slate-200/60 pt-8 sm:pt-10 pb-10 sm:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            <div className="lg:col-span-7 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+            <div className="lg:col-span-7 space-y-4">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100/80 text-blue-800 text-xs font-semibold">
                 <Award className="h-4 w-4 text-blue-700" />
                 <span>Phòng khám Chuyên khoa Tai Mũi Họng Tiêu chuẩn Quốc gia</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight">
+              <h1 className="text-3xl sm:text-4xl lg:text-[2.65rem] font-extrabold text-slate-900 tracking-tight leading-tight">
                 Chăm sóc Tai Mũi Họng tận tâm với{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-teal-600">
                   công nghệ nội soi NBI
@@ -88,15 +88,15 @@ export const HomePage: React.FC = () => {
               </p>
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-4 pt-2">
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
                 <Link to="/appointments/new">
                   <Button size="lg" className="shadow-md shadow-blue-600/20" leftIcon={<Calendar className="h-5 w-5" />}>
-                    Đặt lịch khám ngay (UC-01)
+                    Đặt lịch khám ngay
                   </Button>
                 </Link>
                 <Link to="/medical-history">
                   <Button variant="outline" size="lg" leftIcon={<Search className="h-5 w-5 text-blue-600" />}>
-                    Tra cứu lịch sử khám bệnh (UC-02)
+                    Tra cứu lịch sử khám bệnh
                   </Button>
                 </Link>
               </div>
@@ -120,8 +120,8 @@ export const HomePage: React.FC = () => {
 
             {/* Quick Card Right */}
             <div className="lg:col-span-5">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xl shadow-slate-200/50 space-y-5">
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xl shadow-slate-200/50 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
                   <h3 className="font-bold text-slate-900 text-base">Đặt lịch khám nhanh</h3>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
                     Mở tiếp nhận hôm nay
@@ -144,8 +144,8 @@ export const HomePage: React.FC = () => {
                 </div>
 
                 <Link to="/appointments/new" className="block w-full">
-                  <Button className="w-full justify-center" size="lg">
-                    Tiến hành đặt lịch khám trực tuyến
+                  <Button className="w-full justify-center" size="md">
+                    Đặt lịch khám trực tuyến
                   </Button>
                 </Link>
               </div>

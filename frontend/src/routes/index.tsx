@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Layouts
 import { PublicLayout } from '../layouts/PublicLayout';
+import { AuthLayout } from '../layouts/AuthLayout';
 import { ReceptionistLayout } from '../layouts/ReceptionistLayout';
 import { DoctorLayout } from '../layouts/DoctorLayout';
 import { AdminLayout } from '../layouts/AdminLayout';
@@ -18,7 +19,7 @@ import { ReceptionistDashboardPage } from '../views/receptionist/pages/Reception
 import { PharmacyInventoryPage } from '../views/receptionist/pages/PharmacyInventoryPage';
 import { PatientReceptionPage } from '../views/receptionist/pages/PatientReceptionPage';
 import { AppointmentManagementPage } from '../views/receptionist/pages/AppointmentManagementPage';
-import { RoomAssignmentPage } from '../views/receptionist/pages/RoomAssignmentPage';
+import { ReceptionQueuePage } from '../views/receptionist/pages/ReceptionQueuePage';
 import { PatientRecordsPage } from '../views/receptionist/pages/PatientRecordsPage';
 import { PrescriptionDispensingPage } from '../views/receptionist/pages/PrescriptionDispensingPage';
 import { BillingAndPaymentPage } from '../views/receptionist/pages/BillingAndPaymentPage';
@@ -33,10 +34,12 @@ import { PrescriptionFormPage } from '../views/doctor/pages/PrescriptionFormPage
 // Admin Pages
 import { AdminDashboardPage } from '../views/admin/pages/AdminDashboardPage';
 import { UserManagementPage } from '../views/admin/pages/UserManagementPage';
+import { AccessHistoryPage } from '../views/admin/pages/AccessHistoryPage';
 import { PermissionsAuditPage } from '../views/admin/pages/PermissionsAuditPage';
 
 // Auth Pages
 import { LoginPage } from '../views/auth/pages/LoginPage';
+import { ProtectedRoute } from '../auth/ProtectedRoute';
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -51,22 +54,32 @@ export const AppRoutes: React.FC = () => {
         <Route path="my/appointments" element={<Navigate to="/medical-history" replace />} />
       </Route>
 
-      {/* 2. AUTHENTICATION */}
-      <Route path="/login" element={<LoginPage />} />
+      {/* 2. STAFF AUTHENTICATION PORTAL (Isolated layout, no public header/footer) */}
+      <Route path="/staff" element={<AuthLayout />}>
+        <Route index element={<Navigate to="/staff/login" replace />} />
+        <Route path="login" element={<LoginPage />} />
+      </Route>
+
+      {/* Backward compatibility: redirect /login -> /staff/login */}
+      <Route path="/login" element={<Navigate to="/staff/login" replace />} />
 
       {/* 3. RECEPTIONIST AREA */}
+      <Route element={<ProtectedRoute role="RECEPTIONIST" />}>
       <Route path="/receptionist" element={<ReceptionistLayout />}>
         <Route index element={<ReceptionistDashboardPage />} />
         <Route path="appointments" element={<AppointmentManagementPage />} />
         <Route path="reception" element={<PatientReceptionPage />} />
         <Route path="patients" element={<PatientRecordsPage />} />
-        <Route path="room-assignment" element={<RoomAssignmentPage />} />
+        <Route path="queue" element={<ReceptionQueuePage />} />
+        <Route path="room-assignment" element={<Navigate to="/receptionist/queue" replace />} />
         <Route path="pharmacy" element={<PharmacyInventoryPage />} />
         <Route path="dispensing" element={<PrescriptionDispensingPage />} />
         <Route path="billing" element={<BillingAndPaymentPage />} />
       </Route>
+      </Route>
 
       {/* 3. DOCTOR AREA */}
+      <Route element={<ProtectedRoute role="DOCTOR" />}>
       <Route path="/doctor" element={<DoctorLayout />}>
         <Route index element={<DoctorDashboardPage />} />
         <Route path="queue" element={<DoctorQueuePage />} />
@@ -74,12 +87,16 @@ export const AppRoutes: React.FC = () => {
         <Route path="medical-records" element={<MedicalRecordDetailPage />} />
         <Route path="prescriptions" element={<PrescriptionFormPage />} />
       </Route>
+      </Route>
 
       {/* 4. ADMIN AREA */}
+      <Route element={<ProtectedRoute role="ADMIN" />}>
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<AdminDashboardPage />} />
         <Route path="users" element={<UserManagementPage />} />
+        <Route path="access-history" element={<AccessHistoryPage />} />
         <Route path="permissions" element={<PermissionsAuditPage />} />
+      </Route>
       </Route>
 
       {/* Fallback */}

@@ -84,18 +84,18 @@ export const ServicesPage: React.FC = () => {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
       {/* Header */}
       <div className="space-y-3">
         <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Danh mục dịch vụ y tế</span>
-        <h1 className="text-3xl font-extrabold text-slate-900">Bảng giá & Dịch vụ Khám Tai Mũi Họng</h1>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Bảng giá dịch vụ Tai Mũi Họng</h1>
         <p className="text-sm text-slate-500 max-w-2xl">
           Bảng giá niêm yết công khai, minh bạch theo quy định của Sở Y Tế. Mọi chỉ định thăm khám, nội soi và thủ thuật đều được Bác sĩ giải thích rõ ràng trước khi thực hiện.
         </p>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-slate-200">
+      <div className="flex flex-wrap gap-3 justify-between items-center bg-white p-3 rounded-xl border border-slate-200">
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           {[
             { id: 'ALL', label: 'Tất cả dịch vụ' },
@@ -122,7 +122,7 @@ export const ServicesPage: React.FC = () => {
           <Search className="h-4 w-4 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Tìm theo tên dịch vụ hoặc triệu chứng..."
+            placeholder="Tìm dịch vụ hoặc triệu chứng..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
@@ -131,7 +131,7 @@ export const ServicesPage: React.FC = () => {
       </div>
 
       {/* Services Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map((service) => (
           <Card key={service.id} className="flex flex-col justify-between hover:shadow-md transition-shadow">
             <div className="space-y-4">

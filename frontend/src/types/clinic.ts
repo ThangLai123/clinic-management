@@ -1,284 +1,386 @@
-export type UserRole = 'PATIENT' | 'DOCTOR' | 'RECEPTIONIST' | 'ADMIN';
+/**
+ * CLINIC MANAGEMENT DOMAIN TYPES
+ * Chuẩn hóa 100% theo 25 bảng Microsoft SQL Server (database: clinic_managerment)
+ * Tài liệu chuẩn: clinic_managerment_25_bang_dac_ta_backend.md
+ */
 
-export type AppointmentStatus =
-  | 'CHO_XAC_NHAN'     // Chờ xác nhận
-  | 'DA_XAC_NHAN'      // Đã xác nhận
-  | 'DA_TIEP_NHAN'     // Đã tiếp nhận vào phòng khám
-  | 'DA_HUY'           // Đã hủy
-  | 'KHONG_DEN';       // Không đến
+export * from './database';
 
-export type ReceptionPriority = 'BINH_THUONG' | 'UU_TIEN' | 'CAP_BACH';
+import type {
+  RoleCode,
+  StaffUserStatus,
+  Gender,
+  PhoneRelationship,
+  AppointmentSource,
+  AppointmentStatus,
+  ReceptionType,
+  ReceptionStatus,
+  ExaminationStatus,
+  EntRegion,
+  EntSide,
+  MedicalRecordStatus,
+  MedicineStatus,
+  MedicineLotStatus,
+  SupplierStatus,
+  InventoryMovementType,
+  PrescriptionStatus,
+  DispensationStatus,
+  ClinicalServiceStatus,
+  InvoiceStatus,
+  InvoiceItemType,
+  PaymentMethod,
+  PaymentStatus,
+} from './database';
 
-export type ReceptionStatus =
-  | 'CHO_PHAN_PHONG'   // Chờ phân phòng
-  | 'CHO_KHAM'         // Đã vào phòng, chờ bác sĩ khám
-  | 'DANG_KHAM'        // Đang trong buồng khám
-  | 'CHO_PHAT_THUOC'   // Đã khám xong, chờ phát thuốc
-  | 'CHO_THANH_TOAN'   // Chờ thu ngân
-  | 'HOAN_TAT';        // Đã hoàn tất cả quy trình
+// User Roles in clinic
+export type UserRole = RoleCode;
 
-export type RoomStatus = 'SAN_SANG' | 'DANG_KHAM' | 'TAM_DUNG';
-
-export type PrescriptionStatus =
-  | 'BAN_NHAP'         // Bác sĩ đang soạn
-  | 'CHO_PHAT'         // Đã hoàn tất, chờ quầy dược/lễ tân phát
-  | 'DA_PHAT';         // Đã phát cho bệnh nhân
-
-export type InvoiceStatus =
-  | 'CHO_THANH_TOAN'   // Chưa thu tiền
-  | 'DA_THANH_TOAN'    // Đã thanh toán đầy đủ
-  | 'DA_HUY';          // Hóa đơn bị hủy
-
-export type PaymentMethod = 'TIEN_MAT' | 'CHUYEN_KHOAN_QR' | 'THE_POS';
-
-// Bệnh nhân
+// Table 04: patients
 export interface Patient {
-  id: string;              // Mã BN: BN-001
-  fullName: string;
-  birthDate: string;       // YYYY-MM-DD
-  gender: 'Nam' | 'Nữ' | 'Khác';
-  phoneNumber: string;
-  address?: string;
-  idCardNumber?: string;   // CCCD
-  insuranceNumber?: string; // BHYT
-  emergencyContact?: string;
-  allergies?: string[];    // Tiền sử dị ứng
-  medicalHistory?: string; // Tiền sử bệnh lý
+  id: string; // BIGINT as string for safe JS representation
+  patientCode: string; // patient_code (UNIQUE)
+  fullName: string; // full_name
+  birthDate?: string; // birth_date (DATE)
+  gender: Gender; // gender ('MALE' | 'FEMALE' | 'OTHER' | 'UNSPECIFIED')
+  phone?: string; // phone
+  address?: string; // address
+  occupation?: string; // occupation
+  insuranceNumber?: string; // insurance_number
+  allergyNotes?: string; // allergy_notes
+  medicalHistoryNotes?: string; // medical_history_notes
+  emergencyContactName?: string; // emergency_contact_name
+  emergencyContactPhone?: string; // emergency_contact_phone
+  createdAt: string; // created_at
+  updatedAt: string; // updated_at
+}
+
+// Table 05: patient_phone_links
+export interface PatientPhoneLink {
+  id: string;
+  patientId: string;
+  phoneE164: string; // phone_e164 (chuẩn quốc tế)
+  relationshipToPatient: PhoneRelationship; // 'SELF' | 'PARENT_GUARDIAN' | 'CAREGIVER' | 'OTHER'
+  isPrimary: boolean;
+  verifiedAt?: string;
   createdAt: string;
 }
 
-// Lịch hẹn
+// Table 07: appointments
 export interface Appointment {
-  id: string;              // Mã LH: LH-20261107-001
-  patientName: string;
-  phoneNumber: string;
-  birthDate?: string;
-  gender?: 'Nam' | 'Nữ' | 'Khác';
-  address?: string;
-  appointmentDate: string; // YYYY-MM-DD
-  timeSlot: string;        // 08:00 - 08:30
-  reason: string;
-  symptoms: string[];
-  symptomDuration?: string;
-  notes?: string;
-  status: AppointmentStatus;
-  cancelReason?: string;
+  id: string;
+  appointmentCode: string; // appointment_code (UNIQUE)
+  patientId?: string | null; // patient_id (NULL khi đặt online)
+  fullName: string; // full_name
+  phone: string; // phone
+  birthDate?: string; // birth_date
+  gender: Gender; // gender
+  appointmentDate: string; // appointment_date (YYYY-MM-DD)
+  appointmentTime: string; // appointment_time (HH:mm:ss)
+  symptoms?: string; // symptoms (NVARCHAR(MAX))
+  reason?: string; // UI alias / chief reason
+  address?: string; // address
+  notes?: string; // notes (NVARCHAR(500))
+  source: AppointmentSource; // source ('ONLINE' | 'PHONE' | 'AT_DESK')
+  status: AppointmentStatus; // status ('PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'CANCELLED' | 'NO_SHOW')
+  cancelReason?: string; // cancel reason
   createdAt: string;
+  updatedAt: string;
+  // Computed / join helper
+  timeSlot?: string; // Hiển thị khung giờ (UI helper)
+  patientName?: string; // UI alias
+  phoneNumber?: string; // UI alias
 }
 
-// Tiếp nhận khám
+// Table 08: appointment_status_history
+export interface AppointmentStatusHistory {
+  id: string;
+  appointmentId: string;
+  oldStatus?: AppointmentStatus | null;
+  newStatus: AppointmentStatus;
+  changedByStaffId?: string | null;
+  changedByStaffName?: string; // Join helper
+  reason?: string | null;
+  changedAt: string;
+}
+
+// Table 09: receptions
 export interface Reception {
-  id: string;              // Mã TN: TN-001
-  patientId: string;
-  patientName: string;
-  phoneNumber: string;
-  appointmentId?: string;
-  receptionType: 'DAT_LICH' | 'TRUC_TIEP';
-  receptionTime: string;
-  reason: string;
-  symptoms: string[];
-  priority: ReceptionPriority;
-  assignedRoomId?: string;
-  assignedDoctorName?: string;
-  status: ReceptionStatus;
-  vitalSigns?: {
-    pulse?: number;        // Mạch (lần/phút)
-    bloodPressure?: string; // Huyết áp (mmHg)
-    temperature?: number;  // Nhiệt độ (°C)
-    spO2?: number;         // SpO2 (%)
-  };
+  id: string;
+  receptionCode: string; // reception_code (UNIQUE)
+  patientId: string; // patient_id (NOT NULL)
+  patientName?: string; // Join helper
+  appointmentId?: string | null; // appointment_id (NULL nếu đến trực tiếp)
+  receivedByStaffId: string; // received_by_staff_id
+  receivedByStaffName?: string; // Join helper
+  receptionType: ReceptionType; // 'APPOINTMENT' | 'WALK_IN'
+  status: ReceptionStatus; // 'WAITING' | 'IN_EXAM' | 'COMPLETED' | 'CANCELLED'
+  receivedAt: string; // received_at (DATETIME2)
+  notes?: string | null;
+  // UI helpers for patient info
+  patient?: Patient;
+  appointment?: Appointment | null;
 }
 
-// Phòng khám
-export interface ClinicRoom {
-  id: string;              // PK-01
-  roomName: string;        // Phòng Khám Tai Mũi Họng 1
-  doctorName: string;      // BS.CKI Lê Hoàng Nam
-  specialty: string;       // Khám Tai Mũi Họng tổng quát
-  status: RoomStatus;
-  currentPatientId?: string;
-  waitingCount: number;
+// Table 10: examinations
+export interface Examination {
+  id: string;
+  examinationCode: string; // examination_code (UNIQUE)
+  receptionId: string; // reception_id (UNIQUE)
+  doctorStaffId: string; // doctor_staff_id
+  doctorName?: string; // Join helper
+  chiefComplaint?: string | null; // chief_complaint
+  status: ExaminationStatus; // 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  startedAt: string;
+  completedAt?: string | null;
+  findings?: EntFinding[];
 }
 
-// Thuốc trong kho
-export interface Medicine {
-  id: string;              // TH-001
-  name: string;            // Amoxicillin + Acid Clavulanic
-  brandName: string;       // Augmentin 1g
-  activeIngredient: string; // Amoxicillin 875mg + Clavulanic 125mg
-  dosageForm: string;      // Viên nén bao phim
-  unit: string;            // Hộp / Vỉ / Viên / Lọ
-  batchNumber: string;     // Lô 240801
-  expiryDate: string;      // YYYY-MM-DD
-  stockQuantity: number;
-  minStockLevel: number;
-  importPrice: number;     // Giá nhập (VND)
-  retailPrice: number;     // Giá bán (VND)
-  supplier: string;        // Công ty Dược TW 1
-  isActive: boolean;
-}
-
-// Chi tiết thuốc trong đơn
-export interface PrescriptionItem {
-  medicineId: string;
-  medicineName: string;
-  unit: string;
-  quantity: number;
-  route: string;           // Đường uống, nhỏ tai, xịt mũi...
-  dosage: string;          // 1 viên/lần
-  frequency: string;       // 2 lần/ngày (Sáng 1, Tối 1)
-  days: number;            // 5 ngày
-  instructions: string;    // Uống sau ăn 30 phút
-}
-
-// Đơn thuốc
-export interface Prescription {
-  id: string;              // DT-001
-  patientId: string;
-  patientName: string;
-  receptionId: string;
-  doctorName: string;
-  diagnosis: string;
-  items: PrescriptionItem[];
-  advice?: string;
-  followUpDate?: string;   // Ngày hẹn tái khám
-  status: PrescriptionStatus;
-  dispensedAt?: string;
-  dispensedBy?: string;
+// Table 11: ent_findings
+export interface EntFinding {
+  id: string;
+  examinationId: string;
+  region: EntRegion; // 'EAR' | 'NOSE' | 'THROAT' | 'HEAD_NECK'
+  side: EntSide; // 'LEFT' | 'RIGHT' | 'BOTH' | 'NA'
+  description: string;
   createdAt: string;
 }
 
-// Khám chuyên khoa TMH
-export interface EntExaminationData {
-  receptionId: string;
-  patientId: string;
-  doctorName: string;
-  // Bệnh sử
-  symptomDuration: string;
-  diseaseProgress: string;
-  pastEntSurgeries?: string;
-  currentMedications?: string;
-  // Khám Tai
-  earLeft: {
-    status: 'CHUA_KHAM' | 'BINH_THUONG' | 'BAT_THUONG';
-    externalEar?: string;
-    earCanal?: string;
-    tympanicMembrane?: string; // Màng nhĩ
-    discharge?: string;        // Dịch tiết
-    notes?: string;
-  };
-  earRight: {
-    status: 'CHUA_KHAM' | 'BINH_THUONG' | 'BAT_THUONG';
-    externalEar?: string;
-    earCanal?: string;
-    tympanicMembrane?: string;
-    discharge?: string;
-    notes?: string;
-  };
-  // Khám Mũi
-  nose: {
-    status: 'CHUA_KHAM' | 'BINH_THUONG' | 'BAT_THUONG';
-    mucosa?: string;           // Niêm mạc
-    septum?: string;           // Vách ngăn
-    turbinates?: string;       // Cuốn mũi
-    discharge?: string;        // Dịch mũi
-    polyps?: string;
-    sinusArea?: string;        // Vùng xoang
-    notes?: string;
-  };
-  // Khám Họng - Thanh quản
-  throat: {
-    status: 'CHUA_KHAM' | 'BINH_THUONG' | 'BAT_THUONG';
-    oralCavity?: string;       // Khoang miệng
-    tonsils?: string;          // Amidan (Quá phát độ mấy, có hốc mủ không)
-    pharyngealWall?: string;   // Thành sau họng (hạt xơ, viêm sung huyết)
-    larynx?: string;           // Thanh quản
-    notes?: string;
-  };
-  // Khám Đầu Cổ
-  neck: {
-    status: 'CHUA_KHAM' | 'BINH_THUONG' | 'BAT_THUONG';
-    lymphNodes?: string;       // Hạch cổ
-    salivaryGlands?: string;   // Tuyến nước bọt
-    masses?: string;           // Khối u
-    notes?: string;
-  };
-  // Nội soi
-  endoscopy?: {
-    performed: boolean;
-    procedureType?: string;    // Nội soi Mũi - Xoang - Họng - Tai
-    findings?: string;
-    imageSampleUrl?: string;
-  };
-  // Kết luận
-  diagnosis: string;           // Chẩn đoán chính (kèm mã ICD-10)
-  differentialDiagnosis?: string; // Chẩn đoán phân biệt
-  treatmentPlan: string;       // Hướng xử trí
-  followUpDate?: string;
-  isDraft: boolean;
-}
-
-// Bệnh án tổng hợp
+// Table 12: medical_records
 export interface MedicalRecord {
-  id: string;                  // BA-001
-  receptionId: string;
-  patientId: string;
-  patientName: string;
-  gender: string;
-  birthDate: string;
-  examDate: string;
-  doctorName: string;
-  chiefComplaint: string;      // Lý do khám
-  medicalHistory: string;      // Bệnh sử & tiền sử
-  examinationSummary: string;  // Tóm tắt kết quả Tai - Mũi - Họng
-  endoscopySummary?: string;
-  diagnosis: string;
-  icdCode?: string;
-  treatmentPlan: string;
-  prescriptionId?: string;
-  followUpDate?: string;
-  status: 'BAN_NHAP' | 'HOAN_TAT';
+  id: string;
+  medicalRecordCode: string; // medical_record_code (UNIQUE)
+  examinationId: string; // examination_id (UNIQUE)
+  diagnosis?: string | null; // diagnosis
+  conclusion?: string | null; // conclusion
+  treatmentPlan?: string | null; // treatment_plan
+  doctorAdvice?: string | null; // doctor_advice
+  followUpDate?: string | null; // follow_up_date (DATE)
+  status: MedicalRecordStatus; // 'DRAFT' | 'FINALIZED'
+  finalizedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Join helpers
+  patientId?: string;
+  patientName?: string;
+  doctorName?: string;
+}
+
+// Table 13: medicines
+export interface Medicine {
+  id: string;
+  medicineCode: string; // medicine_code (UNIQUE)
+  medicineName: string; // medicine_name
+  activeIngredient?: string | null; // active_ingredient
+  strength?: string | null; // strength
+  dosageForm?: string | null; // dosage_form
+  unit: string; // unit
+  salePrice: number; // sale_price (DECIMAL)
+  status: MedicineStatus; // 'ACTIVE' | 'INACTIVE'
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Computed / join helper
+  totalStock?: number; // Tổng tồn kho từ các lô AVAILABLE
+  name?: string; // UI alias
+}
+
+// Table 14: medicine_lots
+export interface MedicineLot {
+  id: string;
+  medicineId: string;
+  medicineCode?: string;
+  medicineName?: string;
+  lotNumber: string; // lot_number
+  expiryDate: string; // expiry_date (DATE)
+  quantity: number; // quantity (DECIMAL)
+  status: MedicineLotStatus; // 'AVAILABLE' | 'BLOCKED' | 'QUARANTINED'
   createdAt: string;
 }
 
-// Hóa đơn
+// Table 15: medicine_suppliers
+export interface MedicineSupplier {
+  id: string;
+  supplierCode: string; // supplier_code (UNIQUE)
+  supplierName: string; // supplier_name
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  taxCode?: string | null;
+  status: SupplierStatus; // 'ACTIVE' | 'INACTIVE'
+  createdAt: string;
+}
+
+// Table 16: inventory_movements
+export interface InventoryMovement {
+  id: string;
+  medicineLotId: string;
+  lotNumber?: string;
+  medicineName?: string;
+  movementType: InventoryMovementType; // 'IN' | 'OUT' | 'ADJUSTMENT'
+  quantityChange: number; // quantity_change (+/-)
+  performedByStaffId: string;
+  performedByStaffName?: string;
+  notes?: string | null;
+  createdAt: string;
+}
+
+// Table 17: prescriptions
+export interface Prescription {
+  id: string;
+  prescriptionCode: string; // prescription_code (UNIQUE)
+  examinationId: string;
+  doctorStaffId: string;
+  doctorName?: string;
+  status: PrescriptionStatus; // 'DRAFT' | 'SIGNED' | 'CANCELLED'
+  instructions?: string | null; // instructions (hướng dẫn chung)
+  signedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: PrescriptionItem[];
+  // Join helpers
+  patientId?: string;
+  patientName?: string;
+  receptionId?: string;
+  diagnosis?: string;
+}
+
+// Table 18: prescription_items
+export interface PrescriptionItem {
+  id: string;
+  prescriptionId: string;
+  medicineId: string;
+  medicineName?: string;
+  unit?: string;
+  dosage: string; // dosage (liều dùng)
+  frequency: string; // frequency (tần suất)
+  durationDays?: number | null; // duration_days (số ngày)
+  quantity: number; // quantity (tổng số lượng kê)
+  instructions?: string | null; // instructions
+  createdAt: string;
+}
+
+// Table 19: dispensations
+export interface Dispensation {
+  id: string;
+  dispensationCode: string; // dispensation_code (UNIQUE)
+  prescriptionId: string;
+  prescriptionCode?: string;
+  patientName?: string;
+  dispensedByStaffId: string;
+  dispensedByStaffName?: string;
+  status: DispensationStatus; // 'PENDING' | 'COMPLETED' | 'CANCELLED'
+  dispensedAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  items: DispensationItem[];
+}
+
+// Table 20: dispensation_items
+export interface DispensationItem {
+  id: string;
+  dispensationId: string;
+  prescriptionItemId: string;
+  medicineLotId: string;
+  lotNumber?: string;
+  medicineName?: string;
+  unit?: string;
+  quantity: number; // quantity (số lượng thực phát)
+  unitPrice: number; // unit_price (đơn giá bán tại thời điểm phát)
+  totalPrice?: number; // Computed: quantity * unitPrice
+}
+
+// Table 21: clinical_services
+export interface ClinicalService {
+  id: string;
+  serviceCode: string; // service_code (UNIQUE)
+  serviceName: string; // service_name
+  description?: string | null;
+  price: number; // price
+  status: ClinicalServiceStatus; // 'ACTIVE' | 'INACTIVE'
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Table 22: visit_services
+export interface VisitService {
+  id: string;
+  receptionId: string;
+  serviceId: string;
+  clinicalServiceId?: string;
+  serviceCode?: string;
+  serviceName?: string;
+  quantity: number; // quantity
+  unitPrice: number; // unit_price
+  notes?: string | null;
+  createdAt: string;
+}
+
+// Table 23: invoices
+export interface Invoice {
+  id: string;
+  invoiceCode: string; // invoice_code (UNIQUE)
+  receptionId: string;
+  patientId?: string;
+  patientName?: string;
+  phoneNumber?: string;
+  createdByStaffId: string;
+  createdByStaffName?: string;
+  subtotal: number; // subtotal (tổng dòng chi tiết)
+  discount: number; // discount (số tiền giảm)
+  totalAmount: number; // total_amount (COMPUTED: subtotal - discount)
+  status: InvoiceStatus; // 'UNPAID' | 'PARTIAL' | 'PAID' | 'CANCELLED'
+  paidAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  items: InvoiceItem[];
+  payments: Payment[];
+  // Computed helpers for UI
+  paidAmount?: number; // Tổng các giao dịch payment SUCCESS
+  remainingAmount?: number; // totalAmount - paidAmount
+}
+
+// Table 24: invoice_items
 export interface InvoiceItem {
   id: string;
-  category: 'KHAM_BENH' | 'NOI_SOI' | 'THUOC' | 'THU_THUAT';
+  invoiceId: string;
+  itemType: InvoiceItemType; // 'SERVICE' | 'MEDICINE' | 'OTHER'
+  visitServiceId?: string | null; // NULL nếu là MEDICINE hoặc OTHER
+  dispensationItemId?: string | null; // NULL nếu là SERVICE hoặc OTHER
   description: string;
   quantity: number;
   unitPrice: number;
-  totalPrice: number;
+  totalPrice: number; // COMPUTED: quantity * unitPrice
 }
 
-export interface Invoice {
-  id: string;                  // HD-001
-  receptionId: string;
-  patientId: string;
-  patientName: string;
-  phoneNumber: string;
-  items: InvoiceItem[];
-  subtotal: number;
-  discount: number;
-  totalAmount: number;
-  paidAmount: number;
-  changeAmount: number;
-  paymentMethod: PaymentMethod;
-  status: InvoiceStatus;
-  cashierName: string;
+// Table 25: payments
+export interface Payment {
+  id: string;
+  paymentCode: string; // payment_code (UNIQUE)
+  invoiceId: string;
+  amount: number; // amount
+  paymentMethod: PaymentMethod; // 'CASH' | 'BANK_TRANSFER'
+  status: PaymentStatus; // 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED'
+  receivedByStaffId: string;
+  receivedByStaffName?: string;
+  transactionCode?: string | null; // Mã giao dịch ngân hàng
+  paidAt?: string | null;
+  notes?: string | null;
   createdAt: string;
 }
 
-// Tài khoản nhân viên
+// Table 02: staff_users
 export interface StaffUser {
-  id: string;                  // NV-001
-  fullName: string;
-  username: string;
-  email: string;
-  phoneNumber: string;
-  role: 'ADMIN' | 'DOCTOR' | 'RECEPTIONIST';
-  specialty?: string;
-  isActive: boolean;
+  id: string;
+  staffCode: string; // staff_code (UNIQUE)
+  username: string; // username (UNIQUE)
+  fullName: string; // full_name
+  email?: string | null;
+  phone?: string | null;
+  roleId: string;
+  role: RoleCode; // 'ADMIN' | 'DOCTOR' | 'RECEPTIONIST'
+  licenseNumber?: string | null; // license_number
+  status: StaffUserStatus; // 'ACTIVE' | 'LOCKED' | 'DISABLED'
+  lastLoginAt?: string | null;
   createdAt: string;
+  updatedAt: string;
 }
-

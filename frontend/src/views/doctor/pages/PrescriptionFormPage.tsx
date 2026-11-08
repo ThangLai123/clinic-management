@@ -9,470 +9,359 @@ import {
   AlertTriangle,
   CheckCircle2,
   Calendar,
-  FileCheck,
+  Lock,
+  Save,
   User,
+  ShieldCheck,
 } from 'lucide-react';
 import { Topbar } from '../../../components/shared/Topbar';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
-import { Textarea } from '../../../components/ui/Textarea';
 import { Modal } from '../../../components/ui/Modal';
+import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { useClinicStore } from '../../../mock/clinicStore';
-import type { PrescriptionItem, Medicine, Reception, Patient } from '../../../types/clinic';
+import type { Prescription, PrescriptionItem, Medicine, Reception, Patient } from '../../../types/clinic';
+import { PRESCRIPTION_STATUS_MAP } from '../../../types/database';
 
 export const PrescriptionFormPage: React.FC = () => {
   const store = useClinicStore();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const receptionIdParam = searchParams.get('receptionId') || store.receptions[0]?.id;
-  const diagnosisParam = searchParams.get('diagnosis') || 'Viêm mũi xoang cấp mủ (J01.9)';
+  const examIdParam = searchParams.get('examId') || store.examinations[0]?.id;
 
-  const [activeReception, setActiveReception] = useState<Reception | null>(null);
-  const [activePatient, setActivePatient] = useState<Patient | null>(null);
-  const [diagnosis, setDiagnosis] = useState(diagnosisParam);
-  const [advice, setAdvice] = useState('Uống thuốc sau ăn, kiêng đồ ăn lạnh, uống nhiều nước ấm, giữ ấm vùng cổ họng.');
-  const [followUpDate, setFollowUpDate] = useState('2026-11-14');
+  const [activeExam, setActiveExam] = useState(
+    store.examinations.find((e) => e.id === examIdParam) || store.examinations[0] || null
+  );
+  const [activePrescription, setActivePrescription] = useState<Prescription | null>(null);
 
-  // Items in this prescription
-  const [prescriptionItems, setPrescriptionItems] = useState<PrescriptionItem[]>([
+  // Form states
+  const [instructions, setInstructions] = useState('Uống thuốc sau ăn, kiêng đồ ăn lạnh, súc họng nước muối sinh lý hàng ngày.');
+  const [items, setItems] = useState<Omit<PrescriptionItem, 'id' | 'prescriptionId' | 'createdAt'>[]>([
     {
-      medicineId: 'TH-001',
-      medicineName: 'Cefuroxime Axetil 500mg (Zinnat)',
+      medicineId: '1',
+      medicineName: 'Augmentin 1g',
       unit: 'Viên',
-      quantity: 10,
-      route: 'Đường uống',
       dosage: '1 viên/lần',
       frequency: '2 lần/ngày (Sáng 1 - Tối 1)',
-      days: 5,
-      instructions: 'Uống sau bữa ăn no 15 phút',
+      durationDays: 7,
+      quantity: 14,
+      instructions: 'Uống ngay đầu bữa ăn để giảm kích ứng dạ dày',
     },
     {
-      medicineId: 'TH-005',
-      medicineName: 'Desloratadine 5mg (Aerius)',
-      unit: 'Viên',
-      quantity: 7,
-      route: 'Đường uống',
-      dosage: '1 viên/lần',
-      frequency: '1 lần/ngày (Uống trước khi đi ngủ)',
-      days: 7,
-      instructions: 'Uống với nước ấm',
-    },
-    {
-      medicineId: 'TH-003',
-      medicineName: 'Xylometazoline 0.05% (Otrivin)',
+      medicineId: '2',
+      medicineName: 'Avamys Nasal Spray 120 sprays',
       unit: 'Lọ',
+      dosage: '2 nhát xịt/bên mũi/lần',
+      frequency: '1 lần/ngày vào buổi sáng',
+      durationDays: 30,
       quantity: 1,
-      route: 'Xịt mũi tại chỗ',
-      dosage: '1 nhát xịt/bên mũi/lần',
-      frequency: '2 - 3 lần/ngày',
-      days: 5,
-      instructions: 'Xịt sau khi đã làm sạch hốc mũi bằng nước muối sinh lý',
+      instructions: 'Xịt sau khi đã rửa sạch mũi, lắc đều lọ thuốc trước khi xịt',
     },
   ]);
 
   // Modal Add Medicine
   const [isAddMedModalOpen, setIsAddMedModalOpen] = useState(false);
-  const [searchMedQuery, setSearchMedQuery] = useState('');
-  const [selectedMed, setSelectedMed] = useState<Medicine>(store.medicines[0]);
-  const [route, setRoute] = useState('Đường uống');
+  const [selectedMedId, setSelectedMedId] = useState<string>(store.medicines[0]?.id || '1');
   const [dosage, setDosage] = useState('1 viên/lần');
   const [frequency, setFrequency] = useState('2 lần/ngày (Sáng 1, Tối 1)');
-  const [days, setDays] = useState(5);
+  const [durationDays, setDurationDays] = useState(5);
   const [quantity, setQuantity] = useState(10);
-  const [instructions, setInstructions] = useState('Uống sau bữa ăn');
+  const [itemInstructions, setItemInstructions] = useState('Uống sau bữa ăn no 15 phút');
 
-  // Modal Print Preview
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [createdRxId, setCreatedRxId] = useState<string>('');
-
+  // Load existing prescription if already created for this examination
   useEffect(() => {
-    const rec = store.receptions.find((r) => r.id === receptionIdParam) || store.receptions[0] || null;
-    setActiveReception(rec);
-    if (rec) {
-      const p = store.patients.find((item) => item.id === rec.patientId) || null;
-      setActivePatient(p);
+    if (activeExam) {
+      const rx = store.prescriptions.find((p) => p.examinationId === activeExam.id);
+      if (rx) {
+        setActivePrescription(rx);
+        setInstructions(rx.instructions || '');
+        setItems(rx.items);
+      }
     }
-  }, [receptionIdParam, store.receptions, store.patients]);
+  }, [activeExam, store.prescriptions]);
 
-  const handleRemoveItem = (index: number) => {
-    setPrescriptionItems((prev) => prev.filter((_, i) => i !== index));
-  };
+  const isSigned = activePrescription?.status === 'SIGNED';
 
-  const handleAddMedicineToRx = () => {
-    if (!selectedMed || quantity <= 0) return;
-
-    const newItem: PrescriptionItem = {
-      medicineId: selectedMed.id,
-      medicineName: `${selectedMed.name} (${selectedMed.brandName})`,
-      unit: selectedMed.unit,
-      quantity,
-      route,
-      dosage,
-      frequency,
-      days,
-      instructions,
-    };
-
-    setPrescriptionItems((prev) => [...prev, newItem]);
-    setIsAddMedModalOpen(false);
-  };
-
-  const handleSaveDraft = () => {
-    alert('Đã lưu bản nháp đơn thuốc thành công!');
-  };
-
-  const handleFinalizePrescription = () => {
-    if (!activeReception || !activePatient || prescriptionItems.length === 0) {
-      alert('Vui lòng thêm ít nhất 1 loại thuốc vào đơn!');
+  const handleAddItem = () => {
+    const med = store.medicines.find((m) => m.id === selectedMedId);
+    if (!med || med.status !== 'ACTIVE') {
+      window.alert('Thuốc này đã ngừng sử dụng. Vui lòng chọn thuốc khác.');
       return;
     }
 
-    const rx = store.addPrescription({
-      patientId: activePatient.id,
-      patientName: activePatient.fullName,
-      receptionId: activeReception.id,
-      doctorName: activeReception.assignedDoctorName || 'BS.CKI Lê Hoàng Nam',
-      diagnosis,
-      items: prescriptionItems,
-      advice,
-      followUpDate,
-      status: 'CHO_PHAT', // Ready for receptionist to dispense
-    });
+    setItems((prev) => [
+      ...prev,
+      {
+        medicineId: med.id,
+        medicineName: med.medicineName,
+        unit: med.unit,
+        dosage,
+        frequency,
+        durationDays: Number(durationDays),
+        quantity: Number(quantity),
+        instructions: itemInstructions,
+      },
+    ]);
 
-    setCreatedRxId(rx.id);
-    setIsPrintModalOpen(true);
+    setIsAddMedModalOpen(false);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (isSigned) return;
+    setItems((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSaveDraft = () => {
+    if (!activeExam) return;
+    const newRx = store.createPrescription({
+      examinationId: activeExam.id,
+      doctorStaffId: '2',
+      status: 'DRAFT',
+      instructions,
+      items,
+    });
+    setActivePrescription(newRx);
+    alert('Đã lưu bản nháp đơn thuốc (DRAFT)!');
+  };
+
+  const handleSignPrescription = () => {
+    if (!activeExam) return;
+    if (items.length === 0) {
+      alert('Vui lòng thêm ít nhất một thuốc vào đơn thuốc.');
+      return;
+    }
+
+    if (window.confirm('Xác nhận KÝ SỐ đơn thuốc (SIGNED)? Đơn thuốc sẽ tự động chuyển sang quầy dược để phát thuốc và khóa chỉnh sửa.')) {
+      const signedRx = store.createPrescription({
+        examinationId: activeExam.id,
+        doctorStaffId: '2',
+        status: 'SIGNED',
+        instructions,
+        items,
+      });
+      setActivePrescription(signedRx);
+    }
   };
 
   return (
     <div className="space-y-6">
       <Topbar
-        title="Lập Đơn Thuốc Điện Tử Chuyên Khoa Tai Mũi Họng"
-        subtitle="Use Case 12: Kê đơn thuốc từ danh mục quầy dược phòng khám, kiểm tra tiền sử dị ứng và chuyển quầy phát thuốc (UC-08)."
+        title="Kê đơn thuốc"
+        subtitle="Chọn thuốc, nhập liều dùng và xác nhận đơn."
         actions={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleSaveDraft}>
-              Lưu bản nháp
-            </Button>
-            <Button size="sm" variant="success" onClick={handleFinalizePrescription} leftIcon={<CheckCircle2 className="h-4 w-4" />}>
-              Hoàn tất đơn & Chuyển phát thuốc
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => window.print()} variant="outline" leftIcon={<Printer className="h-4 w-4" />}>
+              In đơn thuốc
             </Button>
           </div>
         }
       />
 
-      {/* Patient info & Allergy Warning */}
-      {activePatient && (
-        <Card className="border-blue-200 bg-blue-50/40">
-          <div className="flex flex-wrap items-center justify-between gap-4 text-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-700 text-white flex items-center justify-center font-bold">
-                <User className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-slate-900 text-sm">{activePatient.fullName}</h3>
-                  <span className="font-mono text-slate-500">Mã: {activePatient.id}</span>
-                  <span className="text-slate-400">|</span>
-                  <span>{activePatient.birthDate} ({activePatient.gender})</span>
-                </div>
-                <p className="text-slate-600 font-medium mt-0.5">
-                  Chẩn đoán: <strong className="text-blue-800">{diagnosis}</strong>
-                </p>
-              </div>
-            </div>
-
-            {/* Prominent Allergy Box */}
-            <div className="p-2.5 bg-rose-100/80 border border-rose-300 rounded-xl text-rose-950 font-bold flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+      {/* Prescription Card */}
+      <Card
+        title={`Đơn thuốc • ${activeExam?.examinationCode || 'Chưa chọn lượt khám'}`}
+        subtitle={`Người bệnh: ${activePrescription?.patientName || 'Chưa có thông tin'} • Bác sĩ kê đơn: ${activePrescription?.doctorName || 'BS.CKI Lê Hoàng Nam'}`}
+        action={
+          activePrescription ? (
+            <StatusBadge type="prescription" status={activePrescription.status} />
+          ) : (
+            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+              Đang soạn thảo
+            </span>
+          )
+        }
+      >
+        <div className="space-y-5 text-xs">
+          {isSigned && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 flex items-center gap-2">
+              <Lock className="h-4 w-4 text-emerald-700 shrink-0" />
               <span>
-                TIỀN SỬ DỊ ỨNG:{' '}
-                {activePatient.allergies && activePatient.allergies.length > 0
-                  ? activePatient.allergies.join(', ')
-                  : 'Không ghi nhận'}
+                Đơn thuốc đã được ký duyệt vào lúc <strong>{activePrescription?.signedAt}</strong>. Dữ liệu đã chuyển sang quầy dược và được khóa chỉnh sửa.
               </span>
             </div>
-          </div>
-        </Card>
-      )}
+          )}
 
-      {/* Prescription Builder Table */}
-      <Card
-        title={`Danh mục thuốc đã kê (${prescriptionItems.length} khoản)`}
-        action={
-          <Button size="sm" onClick={() => setIsAddMedModalOpen(true)} leftIcon={<Plus className="h-4 w-4" />}>
-            Thêm thuốc vào đơn
-          </Button>
-        }
-        noPadding
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
-              <tr>
-                <th className="py-3 px-4">#</th>
-                <th className="py-3 px-4">Tên Thuốc & Biệt Dược</th>
-                <th className="py-3 px-4">Đường Dùng</th>
-                <th className="py-3 px-4 text-center">Số Lượng</th>
-                <th className="py-3 px-4">Liều Dùng & Hướng Dẫn Sử Dụng</th>
-                <th className="py-3 px-4 text-center">Xóa</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {prescriptionItems.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400">
-                    Chưa có loại thuốc nào trong đơn. Nhấn "Thêm thuốc vào đơn" để chọn từ danh mục.
-                  </td>
-                </tr>
-              ) : (
-                prescriptionItems.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
-                    <td className="py-3.5 px-4 font-bold text-slate-400">{idx + 1}</td>
-                    <td className="py-3.5 px-4">
-                      <span className="font-bold text-slate-900 block">{item.medicineName}</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Mã: {item.medicineId}</span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-700 font-medium">{item.route}</td>
-                    <td className="py-3.5 px-4 text-center font-bold text-blue-800 text-sm">
-                      {item.quantity} {item.unit}
-                      <span className="block text-[10px] text-slate-400 font-normal">({item.days} ngày)</span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-700">
-                      <p className="font-semibold">{item.frequency} • {item.dosage}</p>
-                      <p className="text-[11px] text-teal-700 font-medium mt-0.5">{item.instructions}</p>
-                    </td>
-                    <td className="py-3.5 px-4 text-center">
-                      <button
-                        onClick={() => handleRemoveItem(idx)}
-                        className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-slate-100 transition-colors cursor-pointer"
-                        title="Xóa thuốc"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+          {/* Prescription Items Table */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                Danh sách thuốc chỉ định ({items.length} loại)
+              </h4>
+              {!isSigned && (
+                <Button size="sm" onClick={() => {
+                  const firstActive = store.medicines.find((m) => m.status === 'ACTIVE');
+                  if (!firstActive) {
+                    window.alert('Không có thuốc đang sử dụng trong danh mục.');
+                    return;
+                  }
+                  if (!store.medicines.some((m) => m.id === selectedMedId && m.status === 'ACTIVE')) {
+                    setSelectedMedId(firstActive.id);
+                  }
+                  setIsAddMedModalOpen(true);
+                }} leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                  Thêm thuốc vào đơn
+                </Button>
               )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+            </div>
 
-      {/* Doctor Advice & Follow-up */}
-      <Card title="Lời dặn của Bác sĩ & Hẹn ngày tái khám">
-        <div className="space-y-4 text-xs">
-          <Textarea
-            label="Lời dặn dò chế độ sinh hoạt & dinh dưỡng"
-            value={advice}
-            onChange={(e) => setAdvice(e.target.value)}
-            rows={2}
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Hẹn ngày tái khám"
-              type="date"
-              value={followUpDate}
-              onChange={(e) => setFollowUpDate(e.target.value)}
-            />
-            <div className="flex items-end">
-              <p className="text-slate-500 text-[11px] pb-2">
-                * Đơn thuốc sau khi hoàn tất sẽ được chuyển ngay đến <strong>Quầy phát thuốc của Lễ tân (UC-08)</strong> để kiểm tra lô hạn dùng và phát cho bệnh nhân.
-              </p>
+            <div className="border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full min-w-[800px] text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                  <tr>
+                    <th className="py-2.5 px-3">Tên thuốc & Biệt dược</th>
+                    <th className="py-2.5 px-3 text-center">Số lượng</th>
+                    <th className="py-2.5 px-3">Liều lượng</th>
+                    <th className="py-2.5 px-3">Tần suất dùng</th>
+                    <th className="py-2.5 px-3 text-center">Số ngày</th>
+                    <th className="py-2.5 px-3">Hướng dẫn sử dụng</th>
+                    {!isSigned && <th className="py-2.5 px-3 text-center">Xóa</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                        Chưa có thuốc nào trong đơn. Nhấn "Thêm thuốc vào đơn" để chọn.
+                      </td>
+                    </tr>
+                  ) : (
+                    items.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">
+                          {item.medicineName}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold text-blue-700">
+                          {item.quantity} {item.unit}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-700">{item.dosage}</td>
+                        <td className="py-2.5 px-3 text-slate-700">{item.frequency}</td>
+                        <td className="py-2.5 px-3 text-center text-slate-700">{item.durationDays} ngày</td>
+                        <td className="py-2.5 px-3 text-teal-800 font-medium">{item.instructions}</td>
+                        {!isSigned && (
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              onClick={() => handleRemoveItem(idx)}
+                              className="text-slate-400 hover:text-rose-600 transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
+
+          {/* Prescription General Instructions */}
+          <div className="space-y-1.5">
+            <label className="font-bold text-slate-800 text-xs block">
+              Lời dặn dò & Hướng dẫn dùng thuốc:
+            </label>
+            <textarea
+              rows={3}
+              disabled={isSigned}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              placeholder="Uống thuốc sau bữa ăn, không tự ý ngừng thuốc, tái khám đúng hẹn..."
+              className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-600"
+            />
+          </div>
+
+          {/* Action Buttons if not signed */}
+          {!isSigned && (
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <Button size="sm" variant="outline" onClick={handleSaveDraft} leftIcon={<Save className="h-4 w-4" />}>
+                Lưu bản nháp
+              </Button>
+              <Button size="sm" variant="success" onClick={handleSignPrescription} leftIcon={<CheckCircle2 className="h-4 w-4" />}>
+                Xác nhận đơn
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 
-      {/* MODAL: Add Medicine To Prescription */}
+      {/* MODAL: Add Medicine Item */}
       <Modal
         isOpen={isAddMedModalOpen}
         onClose={() => setIsAddMedModalOpen(false)}
-        title="Chọn Thuốc Từ Danh Mục Quầy Dược"
-        maxWidth="xl"
+        title="Thêm Thuốc Vào Đơn"
+        subtitle="Chọn thuốc từ danh mục chuẩn hóa và chỉ định liều lượng cụ thể"
+        maxWidth="lg"
         footer={
           <>
             <Button variant="outline" onClick={() => setIsAddMedModalOpen(false)}>
               Hủy
             </Button>
-            <Button onClick={handleAddMedicineToRx} variant="primary">
-              Thêm vào đơn thuốc
+            <Button onClick={handleAddItem} variant="primary">
+              Thêm vào đơn
             </Button>
           </>
         }
       >
         <div className="space-y-4 text-xs">
-          <div className="space-y-2">
-            <Input
-              label="Tìm kiếm thuốc theo tên hoặc hoạt chất"
-              placeholder="Gõ tên thuốc (Augmentin, Zinnat, Otrivin...)"
-              value={searchMedQuery}
-              onChange={(e) => setSearchMedQuery(e.target.value)}
-              leftIcon={<Search className="h-4 w-4" />}
-            />
+          <Select
+            label="Chọn thuốc trong danh mục *"
+            value={selectedMedId}
+            onChange={(e) => setSelectedMedId(e.target.value)}
+            options={store.medicines
+              .filter((m) => m.status === 'ACTIVE')
+              .map((m) => ({
+                value: m.id,
+                label: `${m.medicineName} (${m.activeIngredient || 'Dược phẩm'}) - ${m.unit}`,
+              }))}
+          />
 
-            <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-white">
-              {store.medicines
-                .filter(
-                  (m) =>
-                    m.name.toLowerCase().includes(searchMedQuery.toLowerCase()) ||
-                    m.brandName.toLowerCase().includes(searchMedQuery.toLowerCase())
-                )
-                .map((m) => {
-                  const isSelected = selectedMed?.id === m.id;
-                  return (
-                    <div
-                      key={m.id}
-                      onClick={() => setSelectedMed(m)}
-                      className={`p-2.5 flex items-center justify-between cursor-pointer transition-colors ${
-                        isSelected ? 'bg-blue-50 text-blue-900 font-semibold' : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      <div>
-                        <span className="font-bold">{m.name} ({m.brandName})</span>
-                        <span className="text-[11px] text-slate-500 block">{m.activeIngredient}</span>
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400">
-                        Tồn: {m.stockQuantity} {m.unit}
-                      </span>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-            <Select
-              label="Đường dùng"
-              value={route}
-              onChange={(e) => setRoute(e.target.value)}
-              options={[
-                { value: 'Đường uống', label: 'Đường uống' },
-                { value: 'Xịt mũi tại chỗ', label: 'Xịt mũi tại chỗ' },
-                { value: 'Nhỏ tai tại chỗ', label: 'Nhỏ tai tại chỗ' },
-                { value: 'Súc họng tại chỗ', label: 'Súc họng tại chỗ' },
-                { value: 'Khí dung mũi họng', label: 'Khí dung mũi họng' },
-              ]}
-            />
+          <div className="grid grid-cols-2 gap-3">
             <Input
-              label="Liều lượng mỗi lần"
+              label="Liều dùng một lần *"
               value={dosage}
               onChange={(e) => setDosage(e.target.value)}
-              placeholder="1 viên/lần, 10ml/lần..."
+              placeholder="1 viên/lần, 2 nhát xịt/lần..."
+              required
             />
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <Input
-                label="Tần suất dùng trong ngày"
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value)}
-                placeholder="2 lần/ngày (Sáng 1 - Tối 1)"
-              />
-            </div>
             <Input
-              label="Số ngày dùng"
-              type="number"
-              min={1}
-              value={days}
-              onChange={(e) => {
-                const d = Number(e.target.value);
-                setDays(d);
-                setQuantity(d * 2); // default 2 pills/day
-              }}
+              label="Tần suất dùng trong ngày *"
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value)}
+              placeholder="2 lần/ngày (Sáng 1 - Tối 1)..."
+              required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Input
-              label={`Tổng số lượng kê (${selectedMed?.unit || 'đơn vị'})`}
+              label="Số ngày điều trị *"
               type="number"
+              value={durationDays}
+              onChange={(e) => setDurationDays(Number(e.target.value))}
               min={1}
-              value={quantity}
-              onChange={(e) => setQuantity(Number(e.target.value))}
               required
             />
             <Input
-              label="Thời điểm uống"
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Uống sau ăn 15 phút"
+              label="Tổng số lượng cấp *"
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(Number(e.target.value))}
+              min={1}
+              required
             />
           </div>
-        </div>
-      </Modal>
 
-      {/* MODAL: Print Prescription Preview */}
-      <Modal
-        isOpen={isPrintModalOpen}
-        onClose={() => setIsPrintModalOpen(false)}
-        title="Đơn Thuốc Điện Tử (Official Prescription)"
-        maxWidth="lg"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setIsPrintModalOpen(false)}>
-              Đóng
-            </Button>
-            <Button variant="primary" onClick={() => window.print()} leftIcon={<Printer className="h-4 w-4" />}>
-              In đơn thuốc
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4 text-xs font-sans p-2">
-          <div className="text-center border-b border-slate-200 pb-3 space-y-1">
-            <h3 className="font-extrabold text-sm text-slate-900 uppercase">
-              Phòng Khám Chuyên Khoa Tai Mũi Họng
-            </h3>
-            <p className="text-[11px] text-slate-500">125 Giải Phóng, Q. Đống Đa, Hà Nội • Điện thoại: 1900 8899</p>
-            <h4 className="font-black text-base text-blue-900 pt-2">ĐƠN THUỐC ĐIỆN TỬ</h4>
-            <p className="text-[11px] font-mono text-slate-400">Mã đơn: {createdRxId || 'DT-20261107-DEMO'}</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 text-slate-700">
-            <p><strong>Người bệnh:</strong> {activePatient?.fullName}</p>
-            <p><strong>Năm sinh:</strong> {activePatient?.birthDate} ({activePatient?.gender})</p>
-            <p><strong>Địa chỉ:</strong> {activePatient?.address || 'Hà Nội'}</p>
-            <p><strong>Ngày kê đơn:</strong> {new Date().toLocaleDateString('vi-VN')}</p>
-            <p className="col-span-2"><strong>Chẩn đoán:</strong> {diagnosis}</p>
-          </div>
-
-          <div className="space-y-2 border-t border-slate-200 pt-3">
-            <h5 className="font-bold text-slate-900">Danh mục thuốc điều trị:</h5>
-            {prescriptionItems.map((item, idx) => (
-              <div key={idx} className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                <div className="flex justify-between font-bold text-slate-900">
-                  <span>{idx + 1}. {item.medicineName}</span>
-                  <span className="text-blue-800">{item.quantity} {item.unit}</span>
-                </div>
-                <p className="text-slate-600 mt-0.5 text-[11px]">
-                  Cách dùng: {item.route} - {item.frequency} ({item.dosage}) • {item.instructions}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t border-slate-200 pt-2 space-y-1 text-slate-600">
-            <p><strong>Lời dặn:</strong> {advice}</p>
-            <p><strong>Tái khám:</strong> Hẹn khám lại vào ngày {followUpDate}</p>
-          </div>
-
-          <div className="flex justify-between pt-6 text-center text-xs">
-            <div>
-              <p className="font-bold">Bệnh nhân / Người nhà</p>
-              <p className="text-slate-400 text-[10px] italic mt-8">(Ký và ghi rõ họ tên)</p>
-            </div>
-            <div>
-              <p className="font-bold">Bác sĩ điều trị</p>
-              <p className="text-blue-700 font-semibold mt-8">{activeReception?.assignedDoctorName || 'BS.CKI Lê Hoàng Nam'}</p>
-            </div>
-          </div>
+          <Input
+            label="Hướng dẫn uống / dùng chi tiết"
+            value={itemInstructions}
+            onChange={(e) => setItemInstructions(e.target.value)}
+            placeholder="Uống sau bữa ăn no 15 phút với nhiều nước..."
+          />
         </div>
       </Modal>
     </div>
   );
 };
-

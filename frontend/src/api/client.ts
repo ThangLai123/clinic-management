@@ -1,5 +1,5 @@
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '') || 'http://localhost:5170';
+  import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '') || 'https://localhost:7114';
 
 export async function apiClient<T>(
   endpoint: string,

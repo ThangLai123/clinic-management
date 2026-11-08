@@ -10,147 +10,115 @@ import {
   CheckCircle2,
   DollarSign,
   AlertCircle,
+  Eye,
+  FileText,
+  Calendar,
 } from 'lucide-react';
 import { Topbar } from '../../../components/shared/Topbar';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
-import { Badge } from '../../../components/ui/Badge';
 import { Modal } from '../../../components/ui/Modal';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { useClinicStore } from '../../../mock/clinicStore';
-import type { Invoice, PaymentMethod, InvoiceItem } from '../../../types/clinic';
+import type { Invoice, PaymentMethod } from '../../../types/clinic';
+import {
+  INVOICE_STATUS_MAP,
+  PAYMENT_METHOD_MAP,
+} from '../../../types/database';
 
 export const BillingAndPaymentPage: React.FC = () => {
   const store = useClinicStore();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNPAID' | 'PARTIAL' | 'PAID'>('ALL');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   // Modal Create Invoice
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedReceptionId, setSelectedReceptionId] = useState('');
-  const [examFee, setExamFee] = useState(150000);
-  const [endoscopyFee, setEndoscopyFee] = useState(250000);
-  const [medicineFee, setMedicineFee] = useState(0);
-  const [discount, setDiscount] = useState(0);
+  const [createDiscount, setCreateDiscount] = useState<number>(0);
 
-  // Modal Payment
+  // Modal Record Payment
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CHUYEN_KHOAN_QR');
-  const [paidInput, setPaidInput] = useState<number>(0);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('BANK_TRANSFER');
+  const [transactionCode, setTransactionCode] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
 
-  // Modal Print Preview
+  // Modal Details & Print Preview
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const filteredInvoices = store.invoices.filter((inv) => {
-    return (
-      inv.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.phoneNumber.includes(searchTerm)
-    );
+    const q = searchTerm.toLowerCase();
+    const matchSearch =
+      inv.invoiceCode.toLowerCase().includes(q) ||
+      (inv.patientName || '').toLowerCase().includes(q) ||
+      (inv.phoneNumber && inv.phoneNumber.includes(q));
+
+    const matchStatus = statusFilter === 'ALL' || inv.status === statusFilter;
+
+    return matchSearch && matchStatus;
   });
 
   const handleOpenCreateInvoice = () => {
-    // Pick first reception waiting for billing
+    // Pick first reception without invoice
     const pendingRec = store.receptions.find(
-      (r) => r.status === 'CHO_THANH_TOAN' || r.status === 'CHO_PHAT_THUOC'
-    );
-    if (pendingRec) {
-      setSelectedReceptionId(pendingRec.id);
-      // Auto calculate medicine fee if rx exists
-      const rx = store.prescriptions.find((p) => p.receptionId === pendingRec.id);
-      if (rx) {
-        let sum = 0;
-        rx.items.forEach((item) => {
-          const med = store.medicines.find((m) => m.id === item.medicineId);
-          sum += (med ? med.retailPrice : 20000) * item.quantity;
-        });
-        setMedicineFee(sum);
-      } else {
-        setMedicineFee(180000);
-      }
-    } else {
-      setSelectedReceptionId(store.receptions[0]?.id || '');
-      setMedicineFee(150000);
-    }
-    setExamFee(150000);
-    setEndoscopyFee(250000);
-    setDiscount(0);
+      (r) => !store.invoices.some((inv) => inv.receptionId === r.id)
+    ) || store.receptions[0];
+
+    setSelectedReceptionId(pendingRec?.id || '');
+    setCreateDiscount(0);
     setIsCreateOpen(true);
   };
 
   const handleConfirmCreateInvoice = () => {
-    const rec = store.receptions.find((r) => r.id === selectedReceptionId);
-    if (!rec) return;
-
-    const sub = examFee + endoscopyFee + medicineFee;
-    const total = Math.max(0, sub - discount);
-
-    const items: InvoiceItem[] = [
-      {
-        id: 'I-1',
-        category: 'KHAM_BENH',
-        description: 'Khám chuyên khoa Tai Mũi Họng',
-        quantity: 1,
-        unitPrice: examFee,
-        totalPrice: examFee,
-      },
-      {
-        id: 'I-2',
-        category: 'NOI_SOI',
-        description: 'Nội soi Tai Mũi Họng ống mềm NBI',
-        quantity: 1,
-        unitPrice: endoscopyFee,
-        totalPrice: endoscopyFee,
-      },
-    ];
-
-    if (medicineFee > 0) {
-      items.push({
-        id: 'I-3',
-        category: 'THUOC',
-        description: 'Thuốc điều trị theo đơn bác sĩ',
-        quantity: 1,
-        unitPrice: medicineFee,
-        totalPrice: medicineFee,
-      });
+    if (!selectedReceptionId) {
+      alert('Vui lòng chọn lượt tiếp nhận khám.');
+      return;
     }
 
-    const newInv = store.addInvoice({
-      receptionId: rec.id,
-      patientId: rec.patientId,
-      patientName: rec.patientName,
-      phoneNumber: rec.phoneNumber,
-      items,
-      subtotal: sub,
-      discount,
-      totalAmount: total,
-      paidAmount: 0,
-      changeAmount: 0,
-      paymentMethod: 'TIEN_MAT',
-      status: 'CHO_THANH_TOAN',
-      cashierName: 'Thu ngân Hoàng Thu Trang',
-    });
-
+    store.createInvoice(selectedReceptionId, '3', Number(createDiscount));
     setIsCreateOpen(false);
   };
 
   const handleOpenPayment = (inv: Invoice) => {
     setSelectedInvoice(inv);
-    setPaidInput(inv.totalAmount);
+    setPaymentAmount(inv.remainingAmount || (inv.totalAmount - (inv.paidAmount || 0)));
+    setPaymentMethod('BANK_TRANSFER');
+    setTransactionCode(`TXN${Date.now().toString().slice(-6)}`);
+    setPaymentNotes('Thanh toán viện phí qua VietQR');
     setIsPaymentOpen(true);
   };
 
   const handleConfirmPayment = () => {
     if (!selectedInvoice) return;
-    store.recordPayment(selectedInvoice.id, paymentMethod, paidInput);
+    if (paymentAmount <= 0) {
+      alert('Số tiền thanh toán phải lớn hơn 0.');
+      return;
+    }
+
+    store.recordPayment({
+      invoiceId: selectedInvoice.id,
+      amount: Number(paymentAmount),
+      paymentMethod,
+      transactionCode: paymentMethod === 'BANK_TRANSFER' ? transactionCode : undefined,
+      receivedByStaffId: '3', // Lễ tân Hoàng Thu Trang
+      notes: paymentNotes || undefined,
+    });
+
     setIsPaymentOpen(false);
-    // Refresh selected
+    // Refresh selected invoice
     const updated = store.invoices.find((i) => i.id === selectedInvoice.id);
     setSelectedInvoice(updated || null);
     setIsPrintModalOpen(true);
+  };
+
+  const handleOpenDetail = (inv: Invoice) => {
+    setSelectedInvoice(inv);
+    setIsDetailOpen(true);
   };
 
   const handleOpenPrint = (inv: Invoice) => {
@@ -161,30 +129,68 @@ export const BillingAndPaymentPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <Topbar
-        title="Quản Lý Hóa Đơn & Thu Ngân Viện Phí"
-        subtitle="Use Case 09: Tổng hợp chi phí khám, nội soi, thủ thuật, thuốc điều trị và ghi nhận giao dịch thanh toán."
+        title="Hóa đơn và thanh toán"
+        subtitle="Theo dõi chi phí khám, tiền thuốc và các khoản đã thu."
         actions={
-          <Button onClick={handleOpenCreateInvoice} leftIcon={<Plus className="h-4 w-4" />}>
-            Lập hóa đơn mới
+          <Button size="sm" onClick={handleOpenCreateInvoice} leftIcon={<Plus className="h-4 w-4" />}>
+            Lập hóa đơn
           </Button>
         }
       />
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-slate-200">
-        <div className="text-xs text-slate-500">
-          Tổng số hóa đơn: <strong className="text-slate-800">{store.invoices.length} chứng từ</strong>{' '}
-          (Chờ thu: <strong className="text-amber-700">{store.invoices.filter((i) => i.status === 'CHO_THANH_TOAN').length}</strong>)
+      {/* Tabs Filter */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'ALL', label: 'Tất cả hóa đơn', count: store.invoices.length },
+            {
+              key: 'UNPAID',
+              label: 'Chưa thanh toán',
+              count: store.invoices.filter((i) => i.status === 'UNPAID').length,
+            },
+            {
+              key: 'PARTIAL',
+              label: 'Thanh toán một phần',
+              count: store.invoices.filter((i) => i.status === 'PARTIAL').length,
+            },
+            {
+              key: 'PAID',
+              label: 'Đã hoàn tất',
+              count: store.invoices.filter((i) => i.status === 'PAID').length,
+            },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key as any)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    isActive ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-64 lg:w-72">
           <Search className="h-4 w-4 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Tìm theo Mã HĐ, tên người bệnh..."
+            placeholder="Tìm hóa đơn, bệnh nhân..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
           />
         </div>
       </div>
@@ -192,15 +198,16 @@ export const BillingAndPaymentPage: React.FC = () => {
       {/* Invoices List */}
       <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[1050px] text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3 px-4">Mã Hóa Đơn</th>
                 <th className="py-3 px-4">Bệnh nhân & SĐT</th>
-                <th className="py-3 px-4">Ngày lập</th>
-                <th className="py-3 px-4 text-right">Tổng chi phí (đ)</th>
-                <th className="py-3 px-4 text-right">Miễn giảm (đ)</th>
-                <th className="py-3 px-4 text-right font-extrabold text-blue-700">Cần thanh toán (đ)</th>
+                <th className="py-3 px-4">Ngày tạo</th>
+                <th className="py-3 px-4 text-right">Tổng chi phí</th>
+                <th className="py-3 px-4 text-right">Giảm giá</th>
+                <th className="py-3 px-4 text-right font-extrabold text-blue-700">Số tiền phải thu</th>
+                <th className="py-3 px-4 text-right">Đã thu / Còn nợ</th>
                 <th className="py-3 px-4 text-center">Trạng thái</th>
                 <th className="py-3 px-4 text-center">Thao tác</th>
               </tr>
@@ -208,38 +215,58 @@ export const BillingAndPaymentPage: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">
-                    Không tìm thấy hóa đơn nào phù hợp.
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                    Không tìm thấy hóa đơn viện phí nào.
                   </td>
                 </tr>
               ) : (
                 filteredInvoices.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3.5 px-4 font-mono font-bold text-blue-700">
-                      {inv.id}
+                      {inv.invoiceCode}
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="font-bold text-slate-900 block">{inv.patientName}</span>
-                      <span className="text-[11px] text-slate-400">{inv.phoneNumber}</span>
+                      <span className="font-bold text-slate-900 block">{inv.patientName || 'Chưa có thông tin'}</span>
+                      <span className="text-[11px] text-slate-400">{inv.phoneNumber || 'Chưa cập nhật'}</span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-600">
-                      {inv.createdAt}
+                      {inv.createdAt.slice(0, 10)}
                     </td>
                     <td className="py-3.5 px-4 text-right font-semibold text-slate-800">
-                      {inv.subtotal.toLocaleString('vi-VN')}
+                      {inv.subtotal.toLocaleString('vi-VN')} ₫
                     </td>
                     <td className="py-3.5 px-4 text-right text-rose-600">
-                      {inv.discount > 0 ? `-${inv.discount.toLocaleString('vi-VN')}` : '0'}
+                      {inv.discount > 0 ? `-${inv.discount.toLocaleString('vi-VN')} ₫` : '0 ₫'}
                     </td>
                     <td className="py-3.5 px-4 text-right font-extrabold text-sm text-blue-800">
-                      {inv.totalAmount.toLocaleString('vi-VN')}
+                      {inv.totalAmount.toLocaleString('vi-VN')} ₫
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <span className="font-bold text-emerald-700 block">
+                        {(inv.paidAmount || 0).toLocaleString('vi-VN')} ₫
+                      </span>
+                      {(inv.remainingAmount || 0) > 0 && (
+                        <span className="text-[10px] text-rose-600 font-semibold">
+                          Còn nợ: {(inv.remainingAmount || 0).toLocaleString('vi-VN')} ₫
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-center">
-                      <StatusBadge type="invoice" value={inv.status} />
+                      <StatusBadge type="invoice" status={inv.status} />
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        {inv.status === 'CHO_THANH_TOAN' ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleOpenDetail(inv)}
+                          leftIcon={<Eye className="h-3.5 w-3.5" />}
+                          title="Xem chi tiết các khoản thu"
+                        >
+                          Chi tiết
+                        </Button>
+
+                        {inv.status !== 'PAID' && inv.status !== 'CANCELLED' && (
                           <Button
                             size="sm"
                             variant="success"
@@ -248,16 +275,16 @@ export const BillingAndPaymentPage: React.FC = () => {
                           >
                             Thu tiền
                           </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenPrint(inv)}
-                            leftIcon={<Printer className="h-3.5 w-3.5" />}
-                          >
-                            In biên lai
-                          </Button>
                         )}
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenPrint(inv)}
+                          leftIcon={<Printer className="h-3.5 w-3.5" />}
+                        >
+                          In phiếu
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -268,154 +295,259 @@ export const BillingAndPaymentPage: React.FC = () => {
         </div>
       </Card>
 
+      {/* Notice about Billing & Payment Policy */}
+      <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 space-y-1">
+        <p className="font-bold flex items-center gap-1.5">
+          <AlertCircle className="h-4 w-4 text-blue-600" />
+          Quy định thanh toán & Xuất hóa đơn:
+        </p>
+        <p className="text-blue-800 leading-relaxed">
+          Số tiền phải thu được hệ thống tự động tính toán dựa trên tổng chi phí dịch vụ thực hiện và các khoản thuốc đã phát, trừ đi số tiền miễn giảm (nếu có). Nhân viên thu ngân kiểm tra kỹ số tiền trước khi xác nhận biên lai.
+        </p>
+      </div>
+
       {/* MODAL: Create Invoice */}
       <Modal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Lập Hóa Đơn Thu Viện Phí Mới"
-        maxWidth="lg"
+        title="Lập Hóa Đơn Viện Phí"
+        subtitle="Hệ thống tự động gom các dịch vụ khám lâm sàng và các khoản phát thuốc"
         footer={
           <>
             <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
               Hủy
             </Button>
             <Button onClick={handleConfirmCreateInvoice} variant="primary">
-              Tạo phiếu hóa đơn
+              Tạo hóa đơn viện phí
             </Button>
           </>
         }
       >
         <div className="space-y-4 text-xs">
           <Select
-            label="Chọn lượt tiếp nhận cần thanh toán"
+            label="Chọn lượt tiếp nhận cần kết toán viện phí"
             value={selectedReceptionId}
             onChange={(e) => setSelectedReceptionId(e.target.value)}
             options={store.receptions.map((r) => ({
               value: r.id,
-              label: `${r.id} - ${r.patientName} (${r.status})`,
+              label: `${r.receptionCode} - ${r.patientName} (${r.receptionType === 'APPOINTMENT' ? 'Có hẹn' : 'Trực tiếp'})`,
             }))}
           />
 
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Tiền khám chuyên khoa TMH (đ)"
-              type="number"
-              value={examFee}
-              onChange={(e) => setExamFee(Number(e.target.value))}
-            />
-            <Input
-              label="Tiền nội soi NBI / thủ thuật (đ)"
-              type="number"
-              value={endoscopyFee}
-              onChange={(e) => setEndoscopyFee(Number(e.target.value))}
-            />
-          </div>
+          <Input
+            label="Chiết khấu / Miễn giảm viện phí (₫)"
+            type="number"
+            value={createDiscount}
+            onChange={(e) => setCreateDiscount(Number(e.target.value))}
+            min={0}
+            helperText="Nhập 0 nếu không áp dụng chính sách miễn giảm"
+          />
 
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Tiền thuốc theo đơn (đ)"
-              type="number"
-              value={medicineFee}
-              onChange={(e) => setMedicineFee(Number(e.target.value))}
-            />
-            <Input
-              label="Giảm giá / Ưu đãi BHYT (đ)"
-              type="number"
-              value={discount}
-              onChange={(e) => setDiscount(Number(e.target.value))}
-            />
-          </div>
-
-          <div className="p-3.5 bg-blue-50 rounded-xl border border-blue-200 flex items-center justify-between font-bold text-sm text-blue-900">
-            <span>Tổng số tiền người bệnh cần thanh toán:</span>
-            <span>{(examFee + endoscopyFee + medicineFee - discount).toLocaleString('vi-VN')} đ</span>
+          <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 text-blue-900">
+            Hóa đơn sau khi lập sẽ tự động tổng hợp tất cả các dịch vụ khám thực hiện và các khoản thuốc phát thành danh sách chi tiết.
           </div>
         </div>
       </Modal>
 
-      {/* MODAL: Process Payment */}
+      {/* MODAL: Record Payment */}
       <Modal
         isOpen={isPaymentOpen}
         onClose={() => setIsPaymentOpen(false)}
-        title="Ghi Nhận Giao Dịch Thanh Toán"
-        subtitle={selectedInvoice ? `Hóa đơn: ${selectedInvoice.id} - Bệnh nhân: ${selectedInvoice.patientName}` : ''}
+        title="Thu Tiền & Ghi Nhận Thanh Toán"
+        subtitle={selectedInvoice ? `Hóa đơn: ${selectedInvoice.invoiceCode} • Người bệnh: ${selectedInvoice.patientName || 'Chưa có thông tin'}` : ''}
         footer={
           <>
             <Button variant="outline" onClick={() => setIsPaymentOpen(false)}>
               Hủy
             </Button>
             <Button onClick={handleConfirmPayment} variant="success" leftIcon={<CheckCircle2 className="h-4 w-4" />}>
-              Xác nhận đã nhận tiền & Xuất hóa đơn
+              Xác nhận thu tiền
             </Button>
           </>
         }
       >
-        <div className="space-y-5 text-xs">
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-1">
-            <span className="text-slate-500">Số tiền cần thu:</span>
-            <p className="text-2xl font-black text-blue-800">
-              {selectedInvoice?.totalAmount.toLocaleString('vi-VN')} đ
-            </p>
-          </div>
-
-          {/* Payment Method Selector */}
-          <div className="space-y-2">
-            <label className="font-bold text-slate-800 text-xs block">Phương thức thanh toán:</label>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { id: 'TIEN_MAT', label: 'Tiền mặt', icon: Banknote },
-                { id: 'CHUYEN_KHOAN_QR', label: 'Chuyển khoản QR', icon: QrCode },
-                { id: 'THE_POS', label: 'Thẻ POS ngân hàng', icon: CreditCard },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setPaymentMethod(m.id as any)}
-                  className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${
-                    paymentMethod === m.id
-                      ? 'border-blue-700 bg-blue-50 text-blue-800 font-bold shadow-xs'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <m.icon className="h-5 w-5" />
-                  <span className="text-xs">{m.label}</span>
-                </button>
-              ))}
+        <div className="space-y-4 text-xs text-slate-700">
+          {/* Balance Overview */}
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-3 gap-2 text-center">
+            <div>
+              <span className="text-[11px] text-slate-400 block">Tổng tiền HĐ:</span>
+              <span className="font-bold text-slate-900">
+                {selectedInvoice?.totalAmount.toLocaleString('vi-VN')} ₫
+              </span>
+            </div>
+            <div>
+              <span className="text-[11px] text-slate-400 block">Đã thanh toán:</span>
+              <span className="font-bold text-emerald-700">
+                {((selectedInvoice?.paidAmount) || 0).toLocaleString('vi-VN')} ₫
+              </span>
+            </div>
+            <div>
+              <span className="text-[11px] text-slate-400 block">Còn phải thu:</span>
+              <span className="font-extrabold text-blue-700">
+                {((selectedInvoice?.remainingAmount) || 0).toLocaleString('vi-VN')} ₫
+              </span>
             </div>
           </div>
 
-          {paymentMethod === 'CHUYEN_KHOAN_QR' && (
-            <div className="p-4 bg-teal-50 rounded-xl border border-teal-200 text-center space-y-2">
-              <div className="w-32 h-32 bg-white border border-teal-300 rounded-lg mx-auto flex items-center justify-center text-teal-800 font-mono text-xs shadow-xs">
-                [ QR VietQR Demo ]
-              </div>
-              <p className="text-[11px] text-teal-800">
-                Quét mã QR thanh toán vào tài khoản Phòng khám: <strong>Ngân hàng Vietcombank - 1900889988</strong>
-              </p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Số tiền thực thu lần này (₫) *"
+              type="number"
+              value={paymentAmount}
+              onChange={(e) => setPaymentAmount(Number(e.target.value))}
+              min={1}
+              required
+            />
+            <Select
+              label="Phương thức thanh toán *"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              options={[
+                { value: 'BANK_TRANSFER', label: 'Chuyển khoản / VietQR' },
+                { value: 'CASH', label: 'Tiền mặt tại quầy' },
+              ]}
+            />
+          </div>
+
+          {paymentMethod === 'BANK_TRANSFER' && (
+            <Input
+              label="Mã giao dịch ngân hàng / Ref Code"
+              value={transactionCode}
+              onChange={(e) => setTransactionCode(e.target.value)}
+              placeholder="FT24..."
+            />
           )}
 
           <Input
-            label="Số tiền người bệnh thực trả (đ)"
-            type="number"
-            value={paidInput}
-            onChange={(e) => setPaidInput(Number(e.target.value))}
+            label="Ghi chú thanh toán"
+            value={paymentNotes}
+            onChange={(e) => setPaymentNotes(e.target.value)}
+            placeholder="Thanh toán viện phí đầy đủ..."
           />
-
-          {paidInput > (selectedInvoice?.totalAmount || 0) && (
-            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 font-semibold flex justify-between">
-              <span>Tiền thừa trả lại bệnh nhân:</span>
-              <span>{(paidInput - (selectedInvoice?.totalAmount || 0)).toLocaleString('vi-VN')} đ</span>
-            </div>
-          )}
         </div>
       </Modal>
 
-      {/* MODAL: Print Invoice */}
+      {/* MODAL: View Invoice Details */}
+      <Modal
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        title="Chi Tiết Hóa Đơn & Lịch Sử Giao Dịch"
+        subtitle={selectedInvoice ? `Hóa đơn: ${selectedInvoice.invoiceCode} • Bệnh nhân: ${selectedInvoice.patientName || 'Chưa có thông tin'}` : ''}
+        maxWidth="2xl"
+        footer={
+          <Button variant="outline" onClick={() => setIsDetailOpen(false)}>
+            Đóng
+          </Button>
+        }
+      >
+        {selectedInvoice && (
+          <div className="space-y-5 text-xs text-slate-700">
+            {/* Invoice Items Table */}
+            <div className="space-y-2">
+              <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                Chi tiết các khoản mục chi phí:
+              </h4>
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                    <tr>
+                      <th className="py-2.5 px-3">Khoản mục</th>
+                      <th className="py-2.5 px-3">Phân loại</th>
+                      <th className="py-2.5 px-3 text-center">Số lượng</th>
+                      <th className="py-2.5 px-3 text-right">Đơn giá</th>
+                      <th className="py-2.5 px-3 text-right">Thành tiền</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {selectedInvoice.items.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">
+                          {item.description}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              item.itemType === 'SERVICE'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-teal-100 text-teal-800'
+                            }`}
+                          >
+                            {item.itemType === 'SERVICE' ? 'Dịch vụ' : 'Thuốc'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                          {item.quantity}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-slate-600">
+                          {item.unitPrice.toLocaleString('vi-VN')} ₫
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                          {item.totalPrice.toLocaleString('vi-VN')} ₫
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Payments History Table */}
+            <div className="space-y-2">
+              <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                Lịch sử các lần thanh toán:
+              </h4>
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                    <tr>
+                      <th className="py-2.5 px-3">Mã GD</th>
+                      <th className="py-2.5 px-3">Hình thức</th>
+                      <th className="py-2.5 px-3 text-right">Số tiền</th>
+                      <th className="py-2.5 px-3">Thời gian</th>
+                      <th className="py-2.5 px-3">Nhân viên thu</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {!selectedInvoice.payments || selectedInvoice.payments.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-4 text-center text-slate-400">
+                          Chưa có giao dịch thanh toán nào được ghi nhận.
+                        </td>
+                      </tr>
+                    ) : (
+                      selectedInvoice.payments.map((p) => (
+                        <tr key={p.id} className="hover:bg-slate-50">
+                          <td className="py-2.5 px-3 font-mono font-bold text-blue-700">
+                            {p.paymentCode}
+                          </td>
+                          <td className="py-2.5 px-3 font-medium">
+                            {PAYMENT_METHOD_MAP[p.paymentMethod]}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                            {p.amount.toLocaleString('vi-VN')} ₫
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-500 font-mono text-[11px]">
+                            {p.paidAt}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-700">
+                            {p.receivedByStaffName}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* MODAL: Printable Receipt */}
       <Modal
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
-        title="Biên Lai Thu Tiền Viện Phí & Hóa Đơn Dịch Vụ"
+        title="Biên Lai Thu Tiền Viện Phí"
         maxWidth="lg"
         footer={
           <>
@@ -423,73 +555,73 @@ export const BillingAndPaymentPage: React.FC = () => {
               Đóng
             </Button>
             <Button variant="primary" onClick={() => window.print()} leftIcon={<Printer className="h-4 w-4" />}>
-              In hóa đơn
+              In biên lai
             </Button>
           </>
         }
       >
-        <div className="space-y-4 text-xs font-sans p-2">
-          <div className="text-center border-b border-slate-200 pb-3 space-y-1">
-            <h3 className="font-extrabold text-sm text-slate-900 uppercase">
-              Phòng Khám Chuyên Khoa Tai Mũi Họng
-            </h3>
-            <p className="text-[11px] text-slate-500">125 Giải Phóng, Q. Đống Đa, Hà Nội • MST: 0108998899</p>
-            <h4 className="font-black text-base text-blue-900 pt-2">HÓA ĐƠN THU TIỀN DỊCH VỤ</h4>
-            <p className="text-[11px] font-mono text-slate-400">Số HĐ: {selectedInvoice?.id}</p>
-          </div>
+        {selectedInvoice && (
+          <div className="space-y-4 text-xs font-sans p-2">
+            <div className="text-center border-b border-slate-200 pb-3 space-y-1">
+              <h3 className="font-extrabold text-sm text-slate-900 uppercase">
+                Phòng Khám Chuyên Khoa Tai Mũi Họng
+              </h3>
+              <p className="text-[11px] text-slate-500">125 Giải Phóng, Q. Đống Đa, Hà Nội • Hotline: 1900 8899</p>
+              <h4 className="font-bold text-base text-blue-800 pt-2">HÓA ĐƠN THU TIỀN VIỆN PHÍ</h4>
+              <p className="text-[11px] font-mono text-slate-400">Mã HĐ: {selectedInvoice.invoiceCode}</p>
+            </div>
 
-          <div className="grid grid-cols-2 gap-2 text-slate-700">
-            <p><strong>Người bệnh:</strong> {selectedInvoice?.patientName}</p>
-            <p><strong>Số điện thoại:</strong> {selectedInvoice?.phoneNumber}</p>
-            <p><strong>Mã lượt khám:</strong> {selectedInvoice?.receptionId}</p>
-            <p><strong>Ngày giờ thu:</strong> {selectedInvoice?.createdAt}</p>
-            <p className="col-span-2">
-              <strong>Hình thức thanh toán:</strong> {selectedInvoice?.paymentMethod}
-            </p>
-          </div>
+            <div className="grid grid-cols-2 gap-2 text-slate-700">
+              <p><strong>Người nộp tiền:</strong> {selectedInvoice.patientName || 'Chưa có thông tin'}</p>
+              <p><strong>Số điện thoại:</strong> {selectedInvoice.phoneNumber || 'Chưa cập nhật'}</p>
+              <p><strong>Thu ngân lập phiếu:</strong> {selectedInvoice.createdByStaffName}</p>
+              <p><strong>Ngày lập:</strong> {selectedInvoice.createdAt}</p>
+            </div>
 
-          <table className="w-full text-left text-xs border border-slate-200 mt-2">
-            <thead className="bg-slate-50 border-b border-slate-200 font-bold">
-              <tr>
-                <th className="p-2">Khoản mục chi phí</th>
-                <th className="p-2 text-center">SL</th>
-                <th className="p-2 text-right">Đơn giá (đ)</th>
-                <th className="p-2 text-right">Thành tiền (đ)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {selectedInvoice?.items.map((it, idx) => (
-                <tr key={idx}>
-                  <td className="p-2 font-medium">{it.description}</td>
-                  <td className="p-2 text-center">{it.quantity}</td>
-                  <td className="p-2 text-right">{it.unitPrice.toLocaleString('vi-VN')}</td>
-                  <td className="p-2 text-right font-semibold">{it.totalPrice.toLocaleString('vi-VN')}</td>
+            <table className="w-full text-left text-xs border border-slate-200 mt-2">
+              <thead className="bg-slate-50 border-b border-slate-200 font-bold">
+                <tr>
+                  <th className="p-2">Nội dung chi phí</th>
+                  <th className="p-2 text-center">SL</th>
+                  <th className="p-2 text-right">Đơn giá</th>
+                  <th className="p-2 text-right">Thành tiền</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {selectedInvoice.items.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="p-2 font-medium">{item.description}</td>
+                    <td className="p-2 text-center">{item.quantity}</td>
+                    <td className="p-2 text-right">{item.unitPrice.toLocaleString('vi-VN')} ₫</td>
+                    <td className="p-2 text-right font-bold">{item.totalPrice.toLocaleString('vi-VN')} ₫</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-          <div className="space-y-1.5 border-t border-slate-200 pt-2 text-right">
-            <p className="text-slate-500">Tổng cộng chi phí: <strong>{selectedInvoice?.subtotal.toLocaleString('vi-VN')} đ</strong></p>
-            {selectedInvoice && selectedInvoice.discount > 0 && (
-              <p className="text-rose-600">Giảm giá: <strong>-{selectedInvoice.discount.toLocaleString('vi-VN')} đ</strong></p>
-            )}
-            <p className="text-sm font-extrabold text-blue-900">
-              Số tiền đã thanh toán: {selectedInvoice?.totalAmount.toLocaleString('vi-VN')} đ
-            </p>
-          </div>
+            <div className="space-y-1 text-right text-xs pt-2 border-t border-slate-200">
+              <p>Cộng tiền viện phí: <strong>{selectedInvoice.subtotal.toLocaleString('vi-VN')} ₫</strong></p>
+              <p>Miễn giảm / Chiết khấu: <strong>-{selectedInvoice.discount.toLocaleString('vi-VN')} ₫</strong></p>
+              <p className="text-sm font-extrabold text-blue-900 pt-1">
+                Tổng cộng thanh toán: {selectedInvoice.totalAmount.toLocaleString('vi-VN')} ₫
+              </p>
+              <p className="text-xs font-bold text-emerald-800">
+                Số tiền đã thu: {(selectedInvoice.paidAmount || 0).toLocaleString('vi-VN')} ₫
+              </p>
+            </div>
 
-          <div className="flex justify-between pt-6 text-center text-xs">
-            <div>
-              <p className="font-bold">Người nộp tiền</p>
-              <p className="text-slate-400 text-[10px] italic mt-8">(Ký và ghi rõ họ tên)</p>
-            </div>
-            <div>
-              <p className="font-bold">Người thu tiền</p>
-              <p className="text-blue-700 font-semibold mt-8">{selectedInvoice?.cashierName}</p>
+            <div className="flex justify-between pt-6 text-center text-xs">
+              <div>
+                <p className="font-bold">Người nộp tiền</p>
+                <p className="text-slate-400 text-[10px] italic mt-8">(Ký và ghi rõ họ tên)</p>
+              </div>
+              <div>
+                <p className="font-bold">Thu ngân viện phí</p>
+                <p className="text-blue-700 font-semibold mt-8">{selectedInvoice.createdByStaffName}</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </Modal>
     </div>
   );
