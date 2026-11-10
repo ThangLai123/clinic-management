@@ -1,87 +1,134 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Calendar, Activity, Check, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Search, Calendar, Check, AlertCircle, RefreshCw, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
+import { getBaseUrl } from '../../../api/client';
 
-interface ServiceItem {
+interface ServiceCategory {
   id: string;
+  code: string;
   name: string;
-  category: 'KHAM_SOI' | 'THU_THUAT' | 'NHI_KHOA' | 'THINH_LUC';
+}
+
+interface ClinicalServiceItem {
+  id: string;
+  serviceCode: string;
+  serviceName: string;
+  categoryCode: string;
+  categoryName: string;
+  description: string | null;
   price: number;
-  duration: string;
-  description: string;
+  durationMin: number | null;
+  durationMax: number | null;
   indications: string[];
 }
 
+interface ClinicalServiceListResponse {
+  totalItems: number;
+  page: number;
+  pageSize: number;
+  items: ClinicalServiceItem[];
+}
+
 export const ServicesPage: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState<boolean>(true);
+
+  const [services, setServices] = useState<ClinicalServiceItem[]>([]);
+  const [totalItems, setTotalItems] = useState<number>(0);
+  const [page, setPage] = useState<number>(1);
+  const pageSize = 12;
+
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
 
-  const services: ServiceItem[] = [
-    {
-      id: 'DV-01',
-      name: 'Khám chuyên khoa Tai Mũi Họng tổng quát',
-      category: 'KHAM_SOI',
-      price: 150000,
-      duration: '15 - 20 phút',
-      description: 'Bác sĩ chuyên khoa thăm khám lâm sàng tỉ mỉ vùng tai, mũi, họng, tư vấn phác đồ điều trị và kê đơn thuốc.',
-      indications: ['Đau họng, ho kéo dài', 'Nghẹt mũi, sổ mũi', 'Ù tai, đau tai'],
-    },
-    {
-      id: 'DV-02',
-      name: 'Nội soi Tai Mũi Họng ống mềm NBI không đau',
-      category: 'KHAM_SOI',
-      price: 250000,
-      duration: '10 - 15 phút',
-      description: 'Sử dụng dây soi mềm siêu nhỏ đường kính 2.8mm, tích hợp ánh sáng dải tần hẹp NBI phát hiện sớm tổn thương niêm mạc và khối u vòm họng.',
-      indications: ['Khàn tiếng trên 2 tuần', 'Nuốt vướng, nghẹn', 'Nghi ngờ ung thư vòm mũi họng'],
-    },
-    {
-      id: 'DV-03',
-      name: 'Đo Thính Lực Đồ & Nhĩ Lượng Chuyên Sâu',
-      category: 'THINH_LUC',
-      price: 200000,
-      duration: '20 - 30 phút',
-      description: 'Đánh giá chính xác ngưỡng nghe của từng tai, kiểm tra độ đàn hồi màng nhĩ và áp lực hòm nhĩ trong phòng cách âm tiêu chuẩn.',
-      indications: ['Giảm sức nghe đột ngột hoặc từ từ', 'Ù tai tiếng ve kêu, tiếng nước chảy', 'Viêm tai thanh dịch'],
-    },
-    {
-      id: 'DV-04',
-      name: 'Lấy dị vật Tai / Mũi / Họng kỹ thuật cao',
-      category: 'THU_THUAT',
-      price: 180000,
-      duration: '10 - 20 phút',
-      description: 'Gắp dị vật xương cá họng, hạt dị vật mũi hoặc côn trùng chui vào tai dưới hướng dẫn của kính soi phóng đại, hạn chế trầy xước niêm mạc.',
-      indications: ['Hóc xương cá', 'Trẻ nhét hạt vào mũi', 'Côn trùng bay vào tai'],
-    },
-    {
-      id: 'DV-05',
-      name: 'Hút rửa xoang & Làm sạch hốc mũi dưới áp lực dương',
-      category: 'THU_THUAT',
-      price: 120000,
-      duration: '15 phút',
-      description: 'Phương pháp Proetz đưa dung dịch kháng viêm vào các xoang cạnh mũi, hút sạch dịch mủ ứ đọng, giải phóng đường thở tức thì.',
-      indications: ['Viêm xoang cấp, mạn tính', 'Xoang hàm ứ dịch', 'Nghẹt mũi đặc đờm xanh'],
-    },
-    {
-      id: 'DV-06',
-      name: 'Khám & Nội soi VA, Amidan cho trẻ em',
-      category: 'NHI_KHOA',
-      price: 250000,
-      duration: '15 - 20 phút',
-      description: 'Bác sĩ nhi khoa khám nhẹ nhàng, nội soi ống mềm không gây sợ hãi, đánh giá chính xác độ quá phát của VA gây ngủ ngáy.',
-      indications: ['Bé ngủ ngáy, thở bằng miệng', 'Thường xuyên viêm mũi họng tái phát', 'Chậm lớn do thiếu oxy khi ngủ'],
-    },
-  ];
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = services.filter((s) => {
-    const matchSearch =
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchCat = selectedCategory === 'ALL' || s.category === selectedCategory;
-    return matchSearch && matchCat;
-  });
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setPage(1);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Load categories once on mount
+  const fetchCategories = async () => {
+    setIsCategoriesLoading(true);
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/services/categories`);
+      if (!res.ok) {
+        throw new Error(`Lỗi tải danh mục: ${res.status}`);
+      }
+      const data: ServiceCategory[] = await res.json();
+      setCategories(data);
+    } catch (err: unknown) {
+      console.error('Không thể tải danh mục dịch vụ:', err);
+    } finally {
+      setIsCategoriesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  // Fetch clinical services whenever filters or page change
+  const fetchServices = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const queryParams = new URLSearchParams();
+    if (selectedCategory && selectedCategory !== 'ALL') {
+      queryParams.append('categoryCode', selectedCategory);
+    }
+    if (debouncedSearch) {
+      queryParams.append('keyword', debouncedSearch);
+    }
+    queryParams.append('page', page.toString());
+    queryParams.append('pageSize', pageSize.toString());
+
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/services?${queryParams.toString()}`);
+      if (!res.ok) {
+        throw new Error(`Không thể kết nối đến máy chủ (${res.status}). Vui lòng thử lại.`);
+      }
+      const data: ClinicalServiceListResponse = await res.json();
+      setServices(data.items);
+      setTotalItems(data.totalItems);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Đã xảy ra lỗi khi tải danh sách dịch vụ.';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchServices();
+  }, [selectedCategory, debouncedSearch, page]);
+
+  const handleCategoryChange = (code: string) => {
+    setSelectedCategory(code);
+    setPage(1);
+  };
+
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+  const formatDuration = (min: number | null, max: number | null): string => {
+    if (min != null && max != null) {
+      if (min === max) return `${min} phút`;
+      return `${min} - ${max} phút`;
+    }
+    if (min != null) return `${min} phút`;
+    if (max != null) return `${max} phút`;
+    return '15 - 30 phút';
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
@@ -95,86 +142,225 @@ export const ServicesPage: React.FC = () => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-wrap gap-3 justify-between items-center bg-white p-3 rounded-xl border border-slate-200">
+      <div className="flex flex-wrap gap-3 justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+        {/* Dynamic Category Tabs */}
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          {[
-            { id: 'ALL', label: 'Tất cả dịch vụ' },
-            { id: 'KHAM_SOI', label: 'Khám & Nội soi NBI' },
-            { id: 'THINH_LUC', label: 'Đo thính lực' },
-            { id: 'THU_THUAT', label: 'Thủ thuật TMH' },
-            { id: 'NHI_KHOA', label: 'TMH Trẻ em' },
-          ].map((cat) => (
+          <button
+            onClick={() => handleCategoryChange('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              selectedCategory === 'ALL'
+                ? 'bg-blue-700 text-white font-semibold shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Tất cả dịch vụ
+          </button>
+          {categories.map((cat) => (
             <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
+              key={cat.id || cat.code}
+              onClick={() => handleCategoryChange(cat.code)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                selectedCategory === cat.id
-                  ? 'bg-blue-700 text-white font-semibold'
+                selectedCategory === cat.code
+                  ? 'bg-blue-700 text-white font-semibold shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              {cat.label}
+              {cat.name}
             </button>
           ))}
+          {isCategoriesLoading && (
+            <span className="flex items-center text-xs text-slate-400 px-2 py-1">
+              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Đang tải danh mục...
+            </span>
+          )}
         </div>
 
-        <div className="relative w-full sm:w-72">
+        {/* Search Input */}
+        <div className="relative w-full sm:w-80">
           <Search className="h-4 w-4 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
             placeholder="Tìm dịch vụ hoặc triệu chứng..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
           />
         </div>
       </div>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="py-16 flex flex-col items-center justify-center space-y-3 bg-white rounded-xl border border-slate-200">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-sm font-medium text-slate-600">Đang tải danh sách dịch vụ y tế...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {!isLoading && error && (
+        <div className="py-12 px-4 flex flex-col items-center justify-center space-y-3 bg-red-50/50 rounded-xl border border-red-200 text-center">
+          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-bold text-red-800">Không thể tải dữ liệu dịch vụ</h3>
+          <p className="text-xs text-red-600 max-w-md">{error}</p>
+          <Button
+            onClick={() => {
+              fetchCategories();
+              fetchServices();
+            }}
+            variant="outline"
+            className="text-xs mt-2 border-red-300 text-red-700 hover:bg-red-100/60"
+            leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
+          >
+            Thử lại
+          </Button>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && !error && services.length === 0 && (
+        <div className="py-16 px-4 flex flex-col items-center justify-center space-y-3 bg-white rounded-xl border border-slate-200 text-center">
+          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+            <Search className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">Không tìm thấy dịch vụ phù hợp.</h3>
+          <p className="text-xs text-slate-500 max-w-sm">
+            Vui lòng thử điều chỉnh từ khóa tìm kiếm hoặc chọn nhóm danh mục dịch vụ khác.
+          </p>
+          {(searchTerm || selectedCategory !== 'ALL') && (
+            <Button
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedCategory('ALL');
+                setPage(1);
+              }}
+              variant="outline"
+              className="text-xs mt-2"
+            >
+              Đặt lại bộ lọc
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Services Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filtered.map((service) => (
-          <Card key={service.id} className="flex flex-col justify-between hover:shadow-md transition-shadow">
-            <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                  {service.id}
-                </span>
-                <span className="text-base font-extrabold text-blue-700">
-                  {service.price.toLocaleString('vi-VN')} đ
-                </span>
-              </div>
+      {!isLoading && !error && services.length > 0 && (
+        <>
+          <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+            <span>
+              Tìm thấy <strong className="text-slate-800">{totalItems}</strong> dịch vụ y tế
+            </span>
+            {totalPages > 1 && (
+              <span>
+                Trang {page} / {totalPages}
+              </span>
+            )}
+          </div>
 
-              <div>
-                <h3 className="font-bold text-slate-900 text-base leading-snug">{service.name}</h3>
-                <p className="text-xs text-slate-400 mt-1">Thời gian thực hiện: {service.duration}</p>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {services.map((service) => {
+              const isFree = service.price === 0;
 
-              <p className="text-xs text-slate-600 leading-relaxed">{service.description}</p>
+              return (
+                <Card
+                  key={service.id}
+                  className="h-full hover:shadow-md transition-shadow [&>div]:flex [&>div]:h-full [&>div]:flex-col"
+                >
+                  <div className="flex-1 space-y-4">
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-base leading-snug">{service.serviceName}</h3>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Thời gian thực hiện: {formatDuration(service.durationMin, service.durationMax)}
+                      </p>
+                    </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <p className="text-[11px] font-bold text-slate-700">Chỉ định phù hợp khi:</p>
-                <ul className="space-y-1">
-                  {service.indications.map((ind, idx) => (
-                    <li key={idx} className="flex items-center gap-2 text-xs text-slate-500">
-                      <Check className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-                      <span>{ind}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5">
+                      <span className="text-xs font-medium text-slate-600">Giá dịch vụ</span>
+                      <span className={`shrink-0 text-base font-extrabold tabular-nums ${isFree ? 'text-emerald-700' : 'text-blue-700'}`}>
+                        {service.price.toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
 
-            <div className="pt-5 mt-4 border-t border-slate-100">
-              <Link to="/appointments/new" className="block w-full">
-                <Button className="w-full justify-center text-xs" leftIcon={<Calendar className="h-4 w-4" />}>
-                  Đặt lịch khám dịch vụ này
+                    {service.description && (
+                      <p className="text-xs text-slate-600 leading-relaxed">{service.description}</p>
+                    )}
+
+                    {service.indications && service.indications.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-slate-100">
+                        <p className="text-[11px] font-bold text-slate-700">Chỉ định phù hợp khi:</p>
+                        <ul className="space-y-1">
+                          {service.indications.map((ind, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-xs text-slate-500">
+                              <Check className="h-3.5 w-3.5 text-teal-600 shrink-0 mt-0.5" />
+                              <span>{ind}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-auto border-t border-slate-100 pt-4">
+                    <Link
+                      to={`/appointments/new?serviceCode=${encodeURIComponent(service.serviceCode)}`}
+                      className="block w-full"
+                    >
+                      <Button className="w-full justify-center text-xs" leftIcon={<Calendar className="h-4 w-4" />}>
+                        Đặt lịch khám dịch vụ này
+                      </Button>
+                    </Link>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-200">
+              <span className="text-xs text-slate-500">
+                Hiển thị {services.length} trên tổng số {totalItems} dịch vụ (Trang {page}/{totalPages})
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="text-xs px-2.5 py-1"
+                  leftIcon={<ChevronLeft className="h-3.5 w-3.5" />}
+                >
+                  Trang trước
                 </Button>
-              </Link>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`w-7 h-7 rounded text-xs font-medium cursor-pointer transition-colors ${
+                      page === p
+                        ? 'bg-blue-700 text-white font-bold'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="text-xs px-2.5 py-1"
+                  rightIcon={<ChevronRight className="h-3.5 w-3.5" />}
+                >
+                  Trang sau
+                </Button>
+              </div>
             </div>
-          </Card>
-        ))}
-      </div>
+          )}
+        </>
+      )}
     </div>
   );
 };
-

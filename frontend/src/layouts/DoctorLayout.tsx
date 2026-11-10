@@ -2,9 +2,12 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../components/shared/Sidebar';
 import { useAuth } from '../auth/AuthContext';
+import { usePageAccessTracker } from '../components/shared/usePageAccessTracker';
 
 export const DoctorLayout: React.FC = () => {
   const { user } = useAuth();
+  usePageAccessTracker();
+
   return (
     <div className="min-h-screen flex bg-[#F7F8FA] text-[#20242B]">
       <Sidebar

@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using ClinicManagement.Api.Helpers;
 using ClinicManagement.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -53,6 +54,12 @@ public class AuthController : ControllerBase
             });
         }
 
+        var ip = ClientInfoHelper.GetClientIp(HttpContext);
+        var ua = Request.Headers.UserAgent.ToString();
+        var device = ClientInfoHelper.GetDevice(ua);
+        var browser = ClientInfoHelper.GetBrowser(ua);
+        var now = DateTime.UtcNow;
+
         // 2. Truy vấn user bằng LINQ
         var username = request.Username.Trim();
         var user = await _context.StaffUsers
@@ -62,6 +69,20 @@ public class AuthController : ControllerBase
         // 3. Kiểm tra user tồn tại, trạng thái ACTIVE và vai trò hợp lệ
         if (user == null || user.Status != "ACTIVE" || !IsAllowedRole(user.Role?.Code))
         {
+            _context.StaffAccessLogs.Add(new StaffAccessLogs
+            {
+                StaffId = user?.Id,
+                Username = username,
+                Activity = "LOGIN",
+                Status = "FAILED",
+                AccessTime = now,
+                IpAddress = ip,
+                Device = device,
+                Browser = browser,
+                PagePath = null
+            });
+            await _context.SaveChangesAsync();
+
             return Unauthorized(new ProblemDetails
             {
                 Status = 401,
@@ -74,6 +95,20 @@ public class AuthController : ControllerBase
         var verifyResult = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
         if (verifyResult == PasswordVerificationResult.Failed)
         {
+            _context.StaffAccessLogs.Add(new StaffAccessLogs
+            {
+                StaffId = user.Id,
+                Username = username,
+                Activity = "LOGIN",
+                Status = "FAILED",
+                AccessTime = now,
+                IpAddress = ip,
+                Device = device,
+                Browser = browser,
+                PagePath = null
+            });
+            await _context.SaveChangesAsync();
+
             return Unauthorized(new ProblemDetails
             {
                 Status = 401,
@@ -83,7 +118,6 @@ public class AuthController : ControllerBase
         }
 
         // 5. Tạo tokens và lưu session
-        var now = DateTime.UtcNow;
         var refreshToken = GenerateRefreshToken();
         var session = new StaffSessions
         {
@@ -96,6 +130,21 @@ public class AuthController : ControllerBase
         _context.StaffSessions.Add(session);
         user.LastLoginAt = now;
         user.UpdatedAt = now;
+
+        // Ghi nhật ký đăng nhập thành công
+        _context.StaffAccessLogs.Add(new StaffAccessLogs
+        {
+            StaffId = user.Id,
+            Username = user.Username,
+            Activity = "LOGIN",
+            Status = "SUCCESS",
+            AccessTime = now,
+            IpAddress = ip,
+            Device = device,
+            Browser = browser,
+            PagePath = null
+        });
+
         await _context.SaveChangesAsync();
 
         // 6. Tạo JWT Access Token
@@ -199,11 +248,32 @@ public class AuthController : ControllerBase
         {
             var hash = HashToken(token);
             var session = await _context.StaffSessions
+                .Include(x => x.Staff)
                 .FirstOrDefaultAsync(x => x.RefreshTokenHash == hash && x.RevokedAt == null);
 
             if (session != null)
             {
-                session.RevokedAt = DateTime.UtcNow;
+                var now = DateTime.UtcNow;
+                session.RevokedAt = now;
+
+                var ip = ClientInfoHelper.GetClientIp(HttpContext);
+                var ua = Request.Headers.UserAgent.ToString();
+                var device = ClientInfoHelper.GetDevice(ua);
+                var browser = ClientInfoHelper.GetBrowser(ua);
+
+                _context.StaffAccessLogs.Add(new StaffAccessLogs
+                {
+                    StaffId = session.StaffId,
+                    Username = session.Staff?.Username ?? string.Empty,
+                    Activity = "LOGOUT",
+                    Status = "SUCCESS",
+                    AccessTime = now,
+                    IpAddress = ip,
+                    Device = device,
+                    Browser = browser,
+                    PagePath = null
+                });
+
                 await _context.SaveChangesAsync();
             }
         }

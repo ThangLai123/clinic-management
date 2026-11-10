@@ -415,4 +415,189 @@ public class AdminController : ControllerBase
             Status = user.Status
         });
     }
+
+    [HttpGet("access-logs/staff-summary")]
+    public async Task<IActionResult> GetStaffAccessSummary()
+    {
+        var staffList = await _context.StaffUsers
+            .AsNoTracking()
+            .Include(x => x.Role)
+            .Where(x => x.Role.Code == "DOCTOR" || x.Role.Code == "RECEPTIONIST")
+            .OrderBy(x => x.Id)
+            .ToListAsync();
+
+        var staffIds = staffList.Select(x => x.Id).ToList();
+
+        var logStats = await _context.StaffAccessLogs
+            .AsNoTracking()
+            .Where(x => x.StaffId != null && staffIds.Contains(x.StaffId.Value))
+            .GroupBy(x => x.StaffId!.Value)
+            .Select(g => new
+            {
+                StaffId = g.Key,
+                TotalLogins = g.Count(x => x.Activity == "LOGIN" && x.Status == "SUCCESS"),
+                LastAccessTime = g.Where(x => x.Status == "SUCCESS").Max(x => (DateTime?)x.AccessTime)
+            })
+            .ToDictionaryAsync(x => x.StaffId);
+
+        var result = staffList.Select(u =>
+        {
+            logStats.TryGetValue(u.Id, out var stats);
+            return new StaffAccessSummaryResponse
+            {
+                Id = u.Id.ToString(),
+                StaffCode = u.StaffCode,
+                FullName = u.FullName,
+                Username = u.Username,
+                RoleCode = u.Role.Code,
+                Status = u.Status,
+                LastAccessTime = stats?.LastAccessTime,
+                TotalLogins = stats?.TotalLogins ?? 0
+            };
+        }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpGet("access-logs/overview-stats")]
+    public async Task<IActionResult> GetAccessOverviewStats()
+    {
+        var vnOffset = TimeSpan.FromHours(7);
+        var nowVn = DateTime.UtcNow + vnOffset;
+        var startOfTodayVn = new DateTime(nowVn.Year, nowVn.Month, nowVn.Day);
+        var startOfTodayUtc = startOfTodayVn - vnOffset;
+        var endOfTodayUtc = startOfTodayUtc.AddDays(1);
+
+        var staffQuery = _context.StaffAccessLogs
+            .AsNoTracking()
+            .Where(x => x.Staff != null && x.Staff.Role != null && (x.Staff.Role.Code == "DOCTOR" || x.Staff.Role.Code == "RECEPTIONIST"));
+
+        var totalAccess = await staffQuery
+            .CountAsync(x => x.Activity == "LOGIN" && x.Status == "SUCCESS");
+
+        var todayAccess = await staffQuery
+            .CountAsync(x => x.Activity == "LOGIN" && x.Status == "SUCCESS" && x.AccessTime >= startOfTodayUtc && x.AccessTime < endOfTodayUtc);
+
+        var mostRecentLog = await staffQuery
+            .Where(x => x.Activity == "LOGIN" && x.Status == "SUCCESS")
+            .OrderByDescending(x => x.AccessTime)
+            .ThenByDescending(x => x.Id)
+            .Select(x => new
+            {
+                x.AccessTime,
+                UserFullName = x.Staff != null ? x.Staff.FullName : x.Username,
+                Username = x.Username
+            })
+            .FirstOrDefaultAsync();
+
+        return Ok(new AccessOverviewStatsResponse
+        {
+            TotalAccess = totalAccess,
+            TodayAccess = todayAccess,
+            MostRecentTime = mostRecentLog?.AccessTime,
+            RecentUserFullName = mostRecentLog?.UserFullName,
+            RecentUserUsername = mostRecentLog?.Username
+        });
+    }
+
+    [HttpGet("access-logs")]
+    public async Task<IActionResult> GetAccessLogs(
+        [FromQuery] long? staffId,
+        [FromQuery] DateTime? @from,
+        [FromQuery] DateTime? to,
+        [FromQuery] string? activity,
+        [FromQuery] string? status,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+        var query = _context.StaffAccessLogs
+            .AsNoTracking()
+            .Include(x => x.Staff)
+            .ThenInclude(x => x!.Role)
+            .Where(x => x.Staff != null && x.Staff.Role != null && (x.Staff.Role.Code == "DOCTOR" || x.Staff.Role.Code == "RECEPTIONIST"));
+
+        if (staffId.HasValue)
+        {
+            var targetStaff = await _context.StaffUsers
+                .AsNoTracking()
+                .Include(x => x.Role)
+                .FirstOrDefaultAsync(x => x.Id == staffId.Value);
+
+            if (targetStaff == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Status = StatusCodes.Status404NotFound,
+                    Title = "Không tìm thấy nhân viên",
+                    Detail = $"Không tìm thấy nhân viên với ID = {staffId.Value}."
+                });
+            }
+
+            if (targetStaff.Role.Code != "DOCTOR" && targetStaff.Role.Code != "RECEPTIONIST")
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Tài khoản không hợp lệ",
+                    Detail = "Chỉ được phép xem lịch sử của Bác sĩ hoặc Lễ tân."
+                });
+            }
+
+            query = query.Where(x => x.StaffId == staffId.Value);
+        }
+
+        if (from.HasValue)
+        {
+            query = query.Where(x => x.AccessTime >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(x => x.AccessTime < to.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(activity) && !activity.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+        {
+            var actUpper = activity.Trim().ToUpperInvariant();
+            query = query.Where(x => x.Activity == actUpper);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status) && !status.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+        {
+            var stUpper = status.Trim().ToUpperInvariant();
+            query = query.Where(x => x.Status == stUpper);
+        }
+
+        var totalItems = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(x => x.AccessTime)
+            .ThenByDescending(x => x.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new AccessLogItemResponse
+            {
+                Id = x.Id.ToString(),
+                Activity = x.Activity,
+                Status = x.Status,
+                AccessTime = x.AccessTime,
+                IpAddress = x.IpAddress,
+                Device = x.Device,
+                Browser = x.Browser,
+                PagePath = x.PagePath
+            })
+            .ToListAsync();
+
+        return Ok(new AccessLogListResponse
+        {
+            StaffId = staffId?.ToString(),
+            TotalItems = totalItems,
+            Page = page,
+            PageSize = pageSize,
+            Items = items
+        });
+    }
 }

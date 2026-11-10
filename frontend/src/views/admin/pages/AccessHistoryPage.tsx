@@ -12,194 +12,403 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  UserCheck,
   ShieldAlert,
   Loader2,
   RefreshCw,
-  Info,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
 } from 'lucide-react';
 import { Topbar } from '../../../components/shared/Topbar';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { useAuth } from '../../../auth/AuthContext';
 import { getBaseUrl } from '../../../api/client';
-import type { StaffUser, RoleCode } from '../../../types/clinic';
 import { ROLE_MAP } from '../../../types/database';
-import {
-  MOCK_ACCESS_HISTORY,
-  getAccessLogsByStaff,
-  ACTIVITY_MAP,
-  STATUS_MAP,
-  type StaffAccessRecord,
-  type AccessActivityType,
-} from '../../../mock/accessHistoryMock';
+
+// Kiểu dữ liệu tóm tắt nhân viên
+interface StaffSummaryItem {
+  id: string;
+  staffCode: string;
+  fullName: string;
+  username: string;
+  roleCode: string;
+  status: string;
+  lastAccessTime: string | null;
+  totalLogins: number;
+}
+
+// Kiểu dữ liệu thống kê tổng quan
+interface OverviewStats {
+  totalAccess: number;
+  todayAccess: number;
+  mostRecentTime: string | null;
+  recentUserFullName: string | null;
+  recentUserUsername: string | null;
+}
+
+// Kiểu dữ liệu bản ghi nhật ký chi tiết
+interface AccessLogItem {
+  id: string;
+  activity: 'LOGIN' | 'LOGOUT' | 'PAGE_ACCESS';
+  status: 'SUCCESS' | 'FAILED';
+  accessTime: string;
+  ipAddress: string | null;
+  device: string | null;
+  browser: string | null;
+  pagePath: string | null;
+}
+
+interface AccessLogListResponse {
+  staffId: string | null;
+  totalItems: number;
+  page: number;
+  pageSize: number;
+  items: AccessLogItem[];
+}
+
+// Chế độ lọc thời gian
+type TimeFilterMode = 'YEAR' | 'MONTH' | 'DAY' | 'HOUR' | 'RANGE';
+
+// Hàm lấy thời điểm hiện tại theo giờ Việt Nam (UTC+7)
+function getVietnamNow(): Date {
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utcMs + 7 * 3600000);
+}
+
+// Format ngày giờ hiển thị theo vi-VN múi giờ Asia/Ho_Chi_Minh
+function formatDateTimeVn(isoString?: string | null): string {
+  if (!isoString) return '--';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '--';
+
+  const timeStr = d.toLocaleTimeString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const dateStr = d.toLocaleDateString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+
+  return `${timeStr} • ${dateStr}`;
+}
+
+// Tính toán khoảng UTC từ cấu hình bộ lọc theo giờ Việt Nam
+function calculateUtcRange(
+  mode: TimeFilterMode,
+  year: number,
+  month: number,
+  dateStr: string,
+  hour: number,
+  customFrom: string,
+  customTo: string
+): { fromUtc?: string; toUtc?: string; label: string } {
+  if (mode === 'YEAR') {
+    const from = new Date(`${year}-01-01T00:00:00+07:00`).toISOString();
+    const to = new Date(`${year + 1}-01-01T00:00:00+07:00`).toISOString();
+    return { fromUtc: from, toUtc: to, label: `Năm ${year}` };
+  }
+
+  if (mode === 'MONTH') {
+    const mStr = String(month).padStart(2, '0');
+    const from = new Date(`${year}-${mStr}-01T00:00:00+07:00`).toISOString();
+    let toDate: Date;
+    if (month === 12) {
+      toDate = new Date(`${year + 1}-01-01T00:00:00+07:00`);
+    } else {
+      const nextMStr = String(month + 1).padStart(2, '0');
+      toDate = new Date(`${year}-${nextMStr}-01T00:00:00+07:00`);
+    }
+    return { fromUtc: from, toUtc: toDate.toISOString(), label: `Tháng ${mStr}/${year}` };
+  }
+
+  if (mode === 'DAY') {
+    if (!dateStr) return { label: 'Tất cả thời gian' };
+    const from = new Date(`${dateStr}T00:00:00+07:00`);
+    const nextDay = new Date(from.getTime() + 24 * 3600000);
+    return {
+      fromUtc: from.toISOString(),
+      toUtc: nextDay.toISOString(),
+      label: `Ngày ${dateStr.split('-').reverse().join('/')}`,
+    };
+  }
+
+  if (mode === 'HOUR') {
+    if (!dateStr) return { label: 'Tất cả thời gian' };
+    const hStr = String(hour).padStart(2, '0');
+    const from = new Date(`${dateStr}T${hStr}:00:00+07:00`);
+    const nextHour = new Date(from.getTime() + 3600000);
+    return {
+      fromUtc: from.toISOString(),
+      toUtc: nextHour.toISOString(),
+      label: `${hStr}:00 - ${hStr}:59, ${dateStr.split('-').reverse().join('/')}`,
+    };
+  }
+
+  if (mode === 'RANGE') {
+    let from: string | undefined;
+    let to: string | undefined;
+    if (customFrom) {
+      from = new Date(`${customFrom}:00+07:00`).toISOString();
+    }
+    if (customTo) {
+      to = new Date(`${customTo}:00+07:00`).toISOString();
+    }
+    return {
+      fromUtc: from,
+      toUtc: to,
+      label: `Khoảng: ${customFrom ? customFrom.replace('T', ' ') : '...'} đến ${customTo ? customTo.replace('T', ' ') : '...'}`,
+    };
+  }
+
+  return { label: 'Tất cả thời gian' };
+}
 
 export const AccessHistoryPage: React.FC = () => {
   const { accessToken } = useAuth();
 
-  // State danh sách nhân viên
-  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  // Khởi tạo thời gian mặc định theo múi giờ Việt Nam
+  const vnNow = useMemo(() => getVietnamNow(), []);
+  const defaultYear = vnNow.getFullYear();
+  const defaultMonth = vnNow.getMonth() + 1;
+  const defaultDateStr = useMemo(() => {
+    const y = vnNow.getFullYear();
+    const m = String(vnNow.getMonth() + 1).padStart(2, '0');
+    const d = String(vnNow.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, [vnNow]);
+  const defaultHour = vnNow.getHours();
 
-  // Bộ lọc danh sách nhân viên
+  // State danh sách nhân viên tóm tắt
+  const [staffSummaryList, setStaffSummaryList] = useState<StaffSummaryItem[]>([]);
+  const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  // State thống kê tổng quan
+  const [overviewStats, setOverviewStats] = useState<OverviewStats>({
+    totalAccess: 0,
+    todayAccess: 0,
+    mostRecentTime: null,
+    recentUserFullName: null,
+    recentUserUsername: null,
+  });
+
+  // State bộ lọc danh sách nhân viên
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
 
   // Nhân viên đang được chọn xem chi tiết lịch sử (null = hiển thị danh sách)
-  const [selectedStaff, setSelectedStaff] = useState<StaffUser | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<StaffSummaryItem | null>(null);
 
-  // Bộ lọc lịch sử chi tiết
+  // State bộ lọc thời gian chi tiết (Mặc định: Năm hiện tại theo UTC+7)
+  const [timeMode, setTimeMode] = useState<TimeFilterMode>('YEAR');
+  const [filterYear, setFilterYear] = useState<number>(defaultYear);
+  const [filterMonth, setFilterMonth] = useState<number>(defaultMonth);
+  const [filterDateStr, setFilterDateStr] = useState<string>(defaultDateStr);
+  const [filterHour, setFilterHour] = useState<number>(defaultHour);
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
+
+  // Bộ lọc đang áp dụng
+  const [appliedTimeFilter, setAppliedTimeFilter] = useState(() =>
+    calculateUtcRange('YEAR', defaultYear, defaultMonth, defaultDateStr, defaultHour, '', '')
+  );
+
+  // Bộ lọc hoạt động và trạng thái
   const [activityFilter, setActivityFilter] = useState<string>('ALL');
-  const [periodFilter, setPeriodFilter] = useState<'ALL' | 'TODAY' | '7DAYS' | '30DAYS'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [detailSearch, setDetailSearch] = useState('');
 
-  // Tải danh sách nhân viên từ Backend API (DOCTOR & RECEPTIONIST)
-  const fetchStaffUsers = useCallback(async () => {
-    setIsLoading(true);
-    setFetchError(null);
-    try {
-      const res = await fetch(`${getBaseUrl()}/api/admin/staff`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-        credentials: 'include',
-      });
+  // Phân trang lịch sử chi tiết
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 20;
 
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-        }
-        if (res.status === 403) {
-          throw new Error('Bạn không có quyền truy cập trang lịch sử nhân viên.');
-        }
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.detail || errorData?.title || `Lỗi máy chủ (${res.status})`);
+  // Dữ liệu nhật ký chi tiết từ Backend
+  const [detailData, setDetailData] = useState<AccessLogListResponse>({
+    staffId: null,
+    totalItems: 0,
+    page: 1,
+    pageSize: 20,
+    items: [],
+  });
+  const [isLoadingDetail, setIsLoadingDetail] = useState<boolean>(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  // 1. Tải danh sách tóm tắt nhân viên và thống kê tổng quan
+  const fetchSummaryAndStats = useCallback(async () => {
+    if (!accessToken) return;
+    setIsLoadingSummary(true);
+    setSummaryError(null);
+
+    try {
+      const headers = {
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Requested-With': 'XMLHttpRequest',
+      };
+
+      const [summaryRes, statsRes] = await Promise.all([
+        fetch(`${getBaseUrl()}/api/admin/access-logs/staff-summary`, { headers, credentials: 'include' }),
+        fetch(`${getBaseUrl()}/api/admin/access-logs/overview-stats`, { headers, credentials: 'include' }),
+      ]);
+
+      if (!summaryRes.ok) {
+        if (summaryRes.status === 401) throw new Error('Phiên đăng nhập đã hết hạn.');
+        if (summaryRes.status === 403) throw new Error('Bạn không có quyền truy cập lịch sử nhân viên.');
+        throw new Error(`Lỗi tải danh sách nhân viên (${summaryRes.status})`);
       }
 
-      const data = await res.json();
-      const mapped: StaffUser[] = data.map((item: any) => ({
-        id: String(item.id),
-        staffCode: item.staffCode,
-        fullName: item.fullName,
-        username: item.username,
-        role: item.roleCode as RoleCode,
-        roleId: item.roleCode === 'ADMIN' ? '1' : item.roleCode === 'DOCTOR' ? '2' : '3',
-        status: item.status,
-        email: item.email || null,
-        phone: item.phone || null,
-        licenseNumber: item.licenseNumber || null,
-        lastLoginAt: item.lastLoginAt || null,
-        createdAt: item.createdAt || '',
-        updatedAt: item.updatedAt || '',
-      }));
-      setStaffUsers(mapped);
+      if (!statsRes.ok) {
+        throw new Error(`Lỗi tải thống kê tổng quan (${statsRes.status})`);
+      }
+
+      const summaryJson: StaffSummaryItem[] = await summaryRes.json();
+      const statsJson: OverviewStats = await statsRes.json();
+
+      setStaffSummaryList(summaryJson);
+      setOverviewStats(statsJson);
     } catch (err) {
-      setFetchError(err instanceof Error ? err.message : 'Không thể kết nối đến máy chủ.');
+      setSummaryError(err instanceof Error ? err.message : 'Không thể kết nối đến máy chủ.');
     } finally {
-      setIsLoading(false);
+      setIsLoadingSummary(false);
     }
   }, [accessToken]);
 
   useEffect(() => {
-    fetchStaffUsers();
-  }, [fetchStaffUsers]);
+    fetchSummaryAndStats();
+  }, [fetchSummaryAndStats]);
 
-  // Format ngày giờ hiển thị
-  const formatDateTime = (isoString?: string | null) => {
-    if (!isoString) return '--';
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return '--';
-    const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const dateStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    return `${timeStr} • ${dateStr}`;
+  // 2. Tải lịch sử truy cập chi tiết của nhân viên được chọn
+  const fetchDetailLogs = useCallback(
+    async (pageToLoad = 1) => {
+      if (!accessToken || !selectedStaff) return;
+      setIsLoadingDetail(true);
+      setDetailError(null);
+
+      try {
+        const queryParams = new URLSearchParams();
+        queryParams.set('staffId', selectedStaff.id);
+        queryParams.set('page', String(pageToLoad));
+        queryParams.set('pageSize', String(pageSize));
+
+        if (appliedTimeFilter.fromUtc) {
+          queryParams.set('from', appliedTimeFilter.fromUtc);
+        }
+        if (appliedTimeFilter.toUtc) {
+          queryParams.set('to', appliedTimeFilter.toUtc);
+        }
+        if (activityFilter !== 'ALL') {
+          queryParams.set('activity', activityFilter);
+        }
+        if (statusFilter !== 'ALL') {
+          queryParams.set('status', statusFilter);
+        }
+
+        const res = await fetch(`${getBaseUrl()}/api/admin/access-logs?${queryParams.toString()}`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'include',
+        });
+
+        if (!res.ok) {
+          if (res.status === 401) throw new Error('Phiên đăng nhập đã hết hạn.');
+          if (res.status === 403) throw new Error('Không có quyền xem chi tiết lịch sử.');
+          throw new Error(`Lỗi tải nhật ký chi tiết (${res.status})`);
+        }
+
+        const data: AccessLogListResponse = await res.json();
+        setDetailData(data);
+        setCurrentPage(pageToLoad);
+      } catch (err) {
+        setDetailError(err instanceof Error ? err.message : 'Lỗi kết nối nhật ký.');
+      } finally {
+        setIsLoadingDetail(false);
+      }
+    },
+    [accessToken, selectedStaff, appliedTimeFilter, activityFilter, statusFilter]
+  );
+
+  // Khi chọn nhân viên hoặc thay đổi bộ lọc đã áp dụng -> Tải chi tiết
+  useEffect(() => {
+    if (selectedStaff) {
+      fetchDetailLogs(1);
+    }
+  }, [selectedStaff, appliedTimeFilter, activityFilter, statusFilter, fetchDetailLogs]);
+
+  // Xử lý nhấn Áp dụng bộ lọc thời gian
+  const handleApplyTimeFilter = () => {
+    const calculated = calculateUtcRange(
+      timeMode,
+      filterYear,
+      filterMonth,
+      filterDateStr,
+      filterHour,
+      customFrom,
+      customTo
+    );
+    setAppliedTimeFilter(calculated);
+    setCurrentPage(1);
   };
 
-  // Tính toán 3 chỉ số thống kê tổng quan từ dữ liệu minh họa
-  const kpiStats = useMemo(() => {
-    const totalAccess = MOCK_ACCESS_HISTORY.length;
+  // Xử lý nhấn Đặt lại bộ lọc thời gian
+  const handleResetTimeFilter = () => {
+    setTimeMode('YEAR');
+    setFilterYear(defaultYear);
+    setFilterMonth(defaultMonth);
+    setFilterDateStr(defaultDateStr);
+    setFilterHour(defaultHour);
+    setCustomFrom('');
+    setCustomTo('');
+    setActivityFilter('ALL');
+    setStatusFilter('ALL');
+    setDetailSearch('');
+    const defaultCalculated = calculateUtcRange('YEAR', defaultYear, defaultMonth, defaultDateStr, defaultHour, '', '');
+    setAppliedTimeFilter(defaultCalculated);
+    setCurrentPage(1);
+  };
 
-    // Lượt truy cập hôm nay (so sánh theo ngày)
-    const todayStr = new Date().toDateString();
-    const todayAccess = MOCK_ACCESS_HISTORY.filter(
-      (log) => new Date(log.timestamp).toDateString() === todayStr
-    ).length;
-
-    // Lần truy cập gần nhất
-    const sortedLogs = [...MOCK_ACCESS_HISTORY].sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-    const mostRecentLog = sortedLogs[0];
-    const mostRecentTime = mostRecentLog ? formatDateTime(mostRecentLog.timestamp) : '--';
-
-    return {
-      totalAccess,
-      todayAccess,
-      mostRecentTime,
-      recentUser: mostRecentLog ? `${mostRecentLog.fullName} (@${mostRecentLog.username})` : '',
-    };
-  }, []);
-
-  // Lọc danh sách nhân viên
+  // Lọc danh sách nhân viên tóm tắt
   const filteredStaffList = useMemo(() => {
-    return staffUsers.filter((u) => {
+    return staffSummaryList.filter((u) => {
       const q = searchTerm.toLowerCase();
       const matchSearch =
         u.fullName.toLowerCase().includes(q) ||
         u.username.toLowerCase().includes(q) ||
         u.staffCode.toLowerCase().includes(q);
 
-      const matchRole = roleFilter === 'ALL' || u.role === roleFilter;
+      const matchRole = roleFilter === 'ALL' || u.roleCode === roleFilter;
       return matchSearch && matchRole;
     });
-  }, [staffUsers, searchTerm, roleFilter]);
+  }, [staffSummaryList, searchTerm, roleFilter]);
 
-  // Lấy lịch sử truy cập của nhân viên đang chọn
-  const selectedStaffLogs = useMemo(() => {
-    if (!selectedStaff) return [];
-    return getAccessLogsByStaff({ id: selectedStaff.id, username: selectedStaff.username });
-  }, [selectedStaff]);
+  // Lọc tìm kiếm cục bộ trên kết quả bảng chi tiết (IP, thiết bị, trình duyệt, pagePath)
+  const filteredDetailItems = useMemo(() => {
+    if (!detailData.items.length) return [];
+    if (!detailSearch.trim()) return detailData.items;
 
-  // Lọc lịch sử chi tiết theo loại hoạt động, khoảng ngày và từ khóa
-  const filteredDetailLogs = useMemo(() => {
-    if (!selectedStaffLogs.length) return [];
-
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
-    const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
-
-    return selectedStaffLogs.filter((log) => {
-      const matchActivity = activityFilter === 'ALL' || log.activity === activityFilter;
-
-      const logTime = new Date(log.timestamp).getTime();
-      let matchPeriod = true;
-      if (periodFilter === 'TODAY') {
-        matchPeriod = logTime >= startOfToday;
-      } else if (periodFilter === '7DAYS') {
-        matchPeriod = logTime >= sevenDaysAgo;
-      } else if (periodFilter === '30DAYS') {
-        matchPeriod = logTime >= thirtyDaysAgo;
-      }
-
-      const q = detailSearch.toLowerCase();
-      const matchSearch =
-        !q ||
-        log.ipAddress.toLowerCase().includes(q) ||
-        log.device.toLowerCase().includes(q) ||
-        log.browser.toLowerCase().includes(q) ||
-        (log.notes && log.notes.toLowerCase().includes(q)) ||
-        (log.failureReason && log.failureReason.toLowerCase().includes(q));
-
-      return matchActivity && matchPeriod && matchSearch;
+    const q = detailSearch.toLowerCase().trim();
+    return detailData.items.filter((item) => {
+      return (
+        (item.ipAddress && item.ipAddress.toLowerCase().includes(q)) ||
+        (item.device && item.device.toLowerCase().includes(q)) ||
+        (item.browser && item.browser.toLowerCase().includes(q)) ||
+        (item.pagePath && item.pagePath.toLowerCase().includes(q))
+      );
     });
-  }, [selectedStaffLogs, activityFilter, periodFilter, detailSearch]);
+  }, [detailData.items, detailSearch]);
 
   // Render Icon thiết bị
-  const renderDeviceIcon = (device: StaffAccessRecord['device']) => {
+  const renderDeviceIcon = (device?: string | null) => {
     switch (device) {
       case 'Mobile':
         return <Smartphone className="h-3.5 w-3.5 text-slate-500" />;
@@ -209,6 +418,18 @@ export const AccessHistoryPage: React.FC = () => {
         return <Laptop className="h-3.5 w-3.5 text-slate-500" />;
     }
   };
+
+  // Tổng số trang chi tiết
+  const totalPages = Math.ceil(detailData.totalItems / pageSize) || 1;
+
+  // Lựa chọn danh sách năm (từ 2024 đến năm hiện tại + 1)
+  const availableYears = useMemo(() => {
+    const list: number[] = [];
+    for (let y = defaultYear + 1; y >= 2024; y--) {
+      list.push(y);
+    }
+    return list;
+  }, [defaultYear]);
 
   return (
     <div className="space-y-6">
@@ -221,10 +442,10 @@ export const AccessHistoryPage: React.FC = () => {
             <Button
               size="sm"
               variant="outline"
-              onClick={fetchStaffUsers}
-              disabled={isLoading}
-              leftIcon={<RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />}
-              title="Tải lại danh sách từ cơ sở dữ liệu"
+              onClick={fetchSummaryAndStats}
+              disabled={isLoadingSummary}
+              leftIcon={<RefreshCw className={`h-4 w-4 ${isLoadingSummary ? 'animate-spin' : ''}`} />}
+              title="Tải lại dữ liệu từ cơ sở dữ liệu"
             >
               Làm mới
             </Button>
@@ -232,23 +453,7 @@ export const AccessHistoryPage: React.FC = () => {
         }
       />
 
-      {/* Banner ghi chú dữ liệu minh họa */}
-      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3 text-xs text-amber-900 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <Info className="h-4 w-4 text-amber-600 shrink-0" />
-          <div>
-            <span className="font-bold text-[11px] bg-amber-200/70 text-amber-900 px-2.5 py-1 rounded-md mr-2">
-              Dữ liệu minh họa – Chưa kết nối lịch sử truy cập
-            </span>
-            <span className="hidden sm:inline">Chức năng giao diện mẫu, chưa kết nối lịch sử truy cập thực tế từ cơ sở dữ liệu.</span>
-          </div>
-        </div>
-        <span className="text-[11px] text-amber-700/80 font-medium hidden lg:inline">
-          Backend API chưa triển khai bảng Audit Log
-        </span>
-      </div>
-
-      {/* 3 Chỉ số thống kê tổng quan */}
+      {/* 3 Chỉ số thống kê tổng quan (Dữ liệu thật từ SQL Server) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Chỉ số 1: Tổng lượt truy cập */}
         <Card className="border-l-4 border-l-blue-600">
@@ -258,10 +463,10 @@ export const AccessHistoryPage: React.FC = () => {
                 Tổng lượt truy cập
               </p>
               <p className="text-2xl font-black text-slate-900 mt-1 tabular-nums">
-                {kpiStats.totalAccess}
+                {overviewStats.totalAccess}
               </p>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Ghi nhận qua hệ thống minh họa
+                Đăng nhập thành công từ trước đến nay
               </p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
@@ -278,10 +483,10 @@ export const AccessHistoryPage: React.FC = () => {
                 Lượt truy cập hôm nay
               </p>
               <p className="text-2xl font-black text-emerald-700 mt-1 tabular-nums">
-                {kpiStats.todayAccess}
+                {overviewStats.todayAccess}
               </p>
               <p className="text-[11px] text-emerald-600 mt-0.5 font-medium">
-                Trong 24 giờ qua
+                Trong ngày (giờ Việt Nam UTC+7)
               </p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
@@ -298,10 +503,12 @@ export const AccessHistoryPage: React.FC = () => {
                 Lần truy cập gần nhất
               </p>
               <p className="text-sm font-bold text-slate-900 mt-1 truncate">
-                {kpiStats.mostRecentTime}
+                {formatDateTimeVn(overviewStats.mostRecentTime)}
               </p>
               <p className="text-[11px] text-indigo-700 font-medium truncate mt-0.5">
-                {kpiStats.recentUser || 'Chưa ghi nhận'}
+                {overviewStats.recentUserFullName
+                  ? `${overviewStats.recentUserFullName} (@${overviewStats.recentUserUsername})`
+                  : 'Chưa có lượt đăng nhập nào'}
               </p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
@@ -311,7 +518,7 @@ export const AccessHistoryPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Nội dung chính: Danh sách nhân viên HOẶC Xem lịch sử chi tiết */}
+      {/* Nội dung chính: Xem lịch sử chi tiết HOẶC Danh sách nhân viên */}
       {selectedStaff ? (
         /* ================= VIEW 2: CHI TIẾT LỊCH SỬ TỪNG NHÂN VIÊN ================= */
         <div className="space-y-4">
@@ -333,12 +540,12 @@ export const AccessHistoryPage: React.FC = () => {
                   <h3 className="font-bold text-slate-900 text-sm">{selectedStaff.fullName}</h3>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      selectedStaff.role === 'DOCTOR'
+                      selectedStaff.roleCode === 'DOCTOR'
                         ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                         : 'bg-amber-100 text-amber-800 border border-amber-200'
                     }`}
                   >
-                    {ROLE_MAP[selectedStaff.role]}
+                    {ROLE_MAP[selectedStaff.roleCode as keyof typeof ROLE_MAP] || selectedStaff.roleCode}
                   </span>
                   <StatusBadge type="staff" status={selectedStaff.status} />
                 </div>
@@ -350,56 +557,228 @@ export const AccessHistoryPage: React.FC = () => {
 
             <div className="flex items-center gap-2">
               <span className="text-xs bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-semibold border border-slate-200">
-                Tổng lượt minh họa: <strong className="text-blue-700">{selectedStaffLogs.length}</strong>
+                Tổng lượt đăng nhập: <strong className="text-blue-700">{selectedStaff.totalLogins}</strong>
               </span>
             </div>
           </div>
 
-          {/* Bộ lọc chi tiết cho bảng lịch sử */}
-          <div className="flex flex-wrap gap-3 justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200">
-            <div className="flex flex-wrap items-center gap-2 min-w-0">
-              {/* Hoạt động */}
+          {/* BỘ LỌC THỜI GIAN THEO YÊU CẦU MỤC 7 */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-slate-400" />
-                <span className="text-xs font-semibold text-slate-700">Hoạt động:</span>
-                <select
-                  value={activityFilter}
-                  onChange={(e) => setActivityFilter(e.target.value)}
-                  className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500"
-                >
-                  <option value="ALL">Tất cả hoạt động</option>
-                  <option value="LOGIN">Đăng nhập</option>
-                  <option value="LOGOUT">Đăng xuất</option>
-                  <option value="PAGE_ACCESS">Truy cập hệ thống</option>
-                </select>
+                <Calendar className="h-4 w-4 text-blue-600" />
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Bộ lọc thời gian (Múi giờ Việt Nam UTC+7)
+                </span>
+                <span className="text-[11px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-md border border-blue-200">
+                  Đang lọc: {appliedTimeFilter.label}
+                </span>
               </div>
-
-              {/* Khoảng ngày */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-700">Thời gian:</span>
-                <select
-                  value={periodFilter}
-                  onChange={(e) => setPeriodFilter(e.target.value as any)}
-                  className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500"
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleResetTimeFilter}
+                  leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
+                  className="!px-2.5 !py-1 text-xs"
                 >
-                  <option value="ALL">Toàn bộ thời gian</option>
-                  <option value="TODAY">Hôm nay</option>
-                  <option value="7DAYS">7 ngày gần đây</option>
-                  <option value="30DAYS">30 ngày gần đây</option>
-                </select>
+                  Đặt lại
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={handleApplyTimeFilter}
+                  leftIcon={<Filter className="h-3.5 w-3.5" />}
+                  className="!px-3 !py-1 text-xs"
+                >
+                  Áp dụng
+                </Button>
               </div>
             </div>
 
-            {/* Tìm kiếm IP/thiết bị */}
-            <div className="relative w-full sm:w-64">
-              <Search className="h-4 w-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Tìm IP, thiết bị, ghi chú..."
-                value={detailSearch}
-                onChange={(e) => setDetailSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
-              />
+            {/* Hàng chọn chế độ lọc và trường nhập */}
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              {/* Chọn chế độ */}
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-slate-600">Chế độ:</span>
+                <select
+                  value={timeMode}
+                  onChange={(e) => setTimeMode(e.target.value as TimeFilterMode)}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                >
+                  <option value="YEAR">Năm (Mặc định)</option>
+                  <option value="MONTH">Tháng</option>
+                  <option value="DAY">Ngày</option>
+                  <option value="HOUR">Giờ</option>
+                  <option value="RANGE">Khoảng thời gian</option>
+                </select>
+              </div>
+
+              {/* Input tương ứng từng chế độ */}
+              {timeMode === 'YEAR' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-600">Chọn năm:</span>
+                  <select
+                    value={filterYear}
+                    onChange={(e) => setFilterYear(Number(e.target.value))}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                  >
+                    {availableYears.map((y) => (
+                      <option key={y} value={y}>
+                        Năm {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {timeMode === 'MONTH' && (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-600">Tháng:</span>
+                    <select
+                      value={filterMonth}
+                      onChange={(e) => setFilterMonth(Number(e.target.value))}
+                      className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <option key={m} value={m}>
+                          Tháng {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-600">Năm:</span>
+                    <select
+                      value={filterYear}
+                      onChange={(e) => setFilterYear(Number(e.target.value))}
+                      className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                    >
+                      {availableYears.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {timeMode === 'DAY' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-600">Chọn ngày:</span>
+                  <input
+                    type="date"
+                    value={filterDateStr}
+                    onChange={(e) => setFilterDateStr(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              )}
+
+              {timeMode === 'HOUR' && (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-600">Ngày:</span>
+                    <input
+                      type="date"
+                      value={filterDateStr}
+                      onChange={(e) => setFilterDateStr(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-600">Giờ (00–23):</span>
+                    <select
+                      value={filterHour}
+                      onChange={(e) => setFilterHour(Number(e.target.value))}
+                      className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => i).map((h) => (
+                        <option key={h} value={h}>
+                          {String(h).padStart(2, '0')}:00 - {String(h).padStart(2, '0')}:59
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {timeMode === 'RANGE' && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-600">Từ:</span>
+                    <input
+                      type="datetime-local"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-600">Đến:</span>
+                    <input
+                      type="datetime-local"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Hàng bộ lọc kết hợp: Hoạt động, Kết quả, Tìm kiếm IP */}
+            <div className="flex flex-wrap gap-3 justify-between items-center pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Hoạt động */}
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="font-semibold text-slate-600">Hoạt động:</span>
+                  <select
+                    value={activityFilter}
+                    onChange={(e) => {
+                      setActivityFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="ALL">Tất cả hoạt động</option>
+                    <option value="LOGIN">Đăng nhập</option>
+                    <option value="LOGOUT">Đăng xuất</option>
+                    <option value="PAGE_ACCESS">Truy cập trang</option>
+                  </select>
+                </div>
+
+                {/* Trạng thái kết quả */}
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="font-semibold text-slate-600">Kết quả:</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="ALL">Tất cả kết quả</option>
+                    <option value="SUCCESS">Thành công</option>
+                    <option value="FAILED">Thất bại</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Tìm kiếm IP/thiết bị */}
+              <div className="relative w-full sm:w-64">
+                <Search className="h-4 w-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Tìm IP, thiết bị, đường dẫn..."
+                  value={detailSearch}
+                  onChange={(e) => setDetailSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+              </div>
             </div>
           </div>
 
@@ -415,54 +794,85 @@ export const AccessHistoryPage: React.FC = () => {
                     <th className="py-3 px-4">Thiết bị</th>
                     <th className="py-3 px-4">Trình duyệt</th>
                     <th className="py-3 px-4 text-center">Kết quả</th>
-                    <th className="py-3 px-4">Ghi chú</th>
+                    <th className="py-3 px-4">Trang đã truy cập / Ghi chú</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {selectedStaffLogs.length === 0 ? (
+                  {isLoadingDetail ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-slate-500">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
+                          <span className="text-xs font-medium">Đang tải nhật ký truy cập từ SQL Server...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : detailError ? (
+                    <tr>
+                      <td colSpan={7} className="py-10 text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <div className="p-2 bg-rose-50 text-rose-600 rounded-full border border-rose-200">
+                            <ShieldAlert className="h-5 w-5" />
+                          </div>
+                          <p className="font-bold text-rose-800 text-xs">{detailError}</p>
+                          <Button size="sm" variant="outline" onClick={() => fetchDetailLogs(currentPage)} leftIcon={<RefreshCw className="h-3.5 w-3.5" />}>
+                            Thử lại
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : detailData.totalItems === 0 || filteredDetailItems.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-12 text-center text-slate-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <History className="h-8 w-8 text-slate-300" />
-                          <p className="font-bold text-slate-700 text-sm">Chưa có dữ liệu lịch sử minh họa</p>
+                          <p className="font-bold text-slate-700 text-sm">
+                            Không có lịch sử truy cập trong khoảng thời gian đã chọn
+                          </p>
                           <p className="text-xs text-slate-400">
-                            Tài khoản @{selectedStaff.username} chưa có bản ghi minh họa trong hệ thống mô phỏng.
+                            Thử thay đổi bộ lọc thời gian hoặc điều kiện tìm kiếm để xem thêm bản ghi.
                           </p>
                         </div>
                       </td>
                     </tr>
-                  ) : filteredDetailLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400">
-                        Không tìm thấy lượt truy cập nào phù hợp với bộ lọc đã chọn.
-                      </td>
-                    </tr>
                   ) : (
-                    filteredDetailLogs.map((log) => {
-                      const actMeta = ACTIVITY_MAP[log.activity] || { label: log.activity, color: 'bg-slate-100 text-slate-700' };
-                      const isSuccess = log.status === 'SUCCESS';
+                    filteredDetailItems.map((item) => {
+                      const isSuccess = item.status === 'SUCCESS';
+                      let actLabel: string = item.activity;
+                      let actColor = 'bg-slate-100 text-slate-700 border-slate-200';
+
+                      if (item.activity === 'LOGIN') {
+                        actLabel = 'Đăng nhập';
+                        actColor = 'bg-blue-50 text-blue-700 border-blue-200';
+                      } else if (item.activity === 'LOGOUT') {
+                        actLabel = 'Đăng xuất';
+                        actColor = 'bg-slate-100 text-slate-700 border-slate-200';
+                      } else if (item.activity === 'PAGE_ACCESS') {
+                        actLabel = 'Truy cập trang';
+                        actColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                      }
 
                       return (
-                        <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                        <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
                           <td className="py-3 px-4 font-mono text-slate-800 whitespace-nowrap">
-                            {formatDateTime(log.timestamp)}
+                            {formatDateTimeVn(item.accessTime)}
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md border ${actMeta.color}`}>
-                              {actMeta.label}
+                            <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md border ${actColor}`}>
+                              {actLabel}
                             </span>
                           </td>
                           <td className="py-3 px-4 font-mono text-slate-600">
-                            {log.ipAddress}
+                            {item.ipAddress || '--'}
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                              {renderDeviceIcon(log.device)}
-                              <span>{log.device}</span>
+                              {renderDeviceIcon(item.device)}
+                              <span>{item.device || 'Desktop'}</span>
                             </div>
                           </td>
                           <td className="py-3 px-4 text-slate-700 font-medium">
-                            {log.browser}
+                            {item.browser || 'Chrome'}
                           </td>
                           <td className="py-3 px-4 text-center">
                             {isSuccess ? (
@@ -471,20 +881,19 @@ export const AccessHistoryPage: React.FC = () => {
                                 Thành công
                               </span>
                             ) : (
-                              <span
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full"
-                                title={log.failureReason || 'Lỗi xác thực'}
-                              >
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
                                 <XCircle className="h-3 w-3 text-rose-600 shrink-0" />
                                 Thất bại
                               </span>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-slate-500 text-[11px]">
-                            {log.failureReason ? (
-                              <span className="text-rose-600 font-medium">{log.failureReason}</span>
+                          <td className="py-3 px-4 text-slate-600 text-[11px] font-mono">
+                            {item.pagePath ? (
+                              <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                {item.pagePath}
+                              </span>
                             ) : (
-                              log.notes || '--'
+                              '--'
                             )}
                           </td>
                         </tr>
@@ -494,6 +903,35 @@ export const AccessHistoryPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Phân trang */}
+            {detailData.totalItems > pageSize && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50 text-xs">
+                <span className="text-slate-500">
+                  Hiển thị trang <strong>{currentPage}</strong> / <strong>{totalPages}</strong> ({detailData.totalItems} bản ghi)
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={currentPage <= 1 || isLoadingDetail}
+                    onClick={() => fetchDetailLogs(currentPage - 1)}
+                    leftIcon={<ChevronLeft className="h-3.5 w-3.5" />}
+                  >
+                    Trước
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={currentPage >= totalPages || isLoadingDetail}
+                    onClick={() => fetchDetailLogs(currentPage + 1)}
+                    rightIcon={<ChevronRight className="h-3.5 w-3.5" />}
+                  >
+                    Sau
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
       ) : (
@@ -539,12 +977,12 @@ export const AccessHistoryPage: React.FC = () => {
                     <th className="py-3 px-4">Họ và Tên nhân viên</th>
                     <th className="py-3 px-4 text-center">Vai trò</th>
                     <th className="py-3 px-4">Lần truy cập gần nhất</th>
-                    <th className="py-3 px-4 text-center">Số lượt truy cập</th>
+                    <th className="py-3 px-4 text-center">Số lượt đăng nhập</th>
                     <th className="py-3 px-4 text-center">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {isLoading ? (
+                  {isLoadingSummary ? (
                     <tr>
                       <td colSpan={6} className="py-12 text-center text-slate-500">
                         <div className="flex flex-col items-center justify-center gap-2">
@@ -553,15 +991,15 @@ export const AccessHistoryPage: React.FC = () => {
                         </div>
                       </td>
                     </tr>
-                  ) : fetchError ? (
+                  ) : summaryError ? (
                     <tr>
                       <td colSpan={6} className="py-10 text-center">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <div className="p-2 bg-rose-50 text-rose-600 rounded-full border border-rose-200">
                             <ShieldAlert className="h-5 w-5" />
                           </div>
-                          <p className="font-bold text-rose-800 text-xs">{fetchError}</p>
-                          <Button size="sm" variant="outline" onClick={fetchStaffUsers} leftIcon={<RefreshCw className="h-3.5 w-3.5" />}>
+                          <p className="font-bold text-rose-800 text-xs">{summaryError}</p>
+                          <Button size="sm" variant="outline" onClick={fetchSummaryAndStats} leftIcon={<RefreshCw className="h-3.5 w-3.5" />}>
                             Thử lại
                           </Button>
                         </div>
@@ -575,10 +1013,6 @@ export const AccessHistoryPage: React.FC = () => {
                     </tr>
                   ) : (
                     filteredStaffList.map((user) => {
-                      const userLogs = getAccessLogsByStaff({ id: user.id, username: user.username });
-                      const recentLog = userLogs[0];
-                      const recentAccessText = recentLog ? formatDateTime(recentLog.timestamp) : (user.lastLoginAt ? formatDateTime(user.lastLoginAt) : '--');
-
                       return (
                         <tr key={user.id} className="hover:bg-slate-50/70 transition-colors">
                           <td className="py-3.5 px-4 font-mono font-bold text-blue-700">
@@ -593,21 +1027,21 @@ export const AccessHistoryPage: React.FC = () => {
                           <td className="py-3.5 px-4 text-center">
                             <span
                               className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                                user.role === 'DOCTOR'
+                                user.roleCode === 'DOCTOR'
                                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                                   : 'bg-amber-100 text-amber-800 border border-amber-200'
                               }`}
                             >
-                              {ROLE_MAP[user.role]}
+                              {ROLE_MAP[user.roleCode as keyof typeof ROLE_MAP] || user.roleCode}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 font-mono text-slate-700">
-                            {recentAccessText}
+                            {formatDateTimeVn(user.lastAccessTime)}
                           </td>
                           <td className="py-3.5 px-4 text-center font-bold text-slate-800 tabular-nums">
-                            {userLogs.length > 0 ? (
-                              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                                {userLogs.length} lượt
+                            {user.totalLogins > 0 ? (
+                              <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                {user.totalLogins} lượt
                               </span>
                             ) : (
                               <span className="text-slate-400 font-normal">0 lượt</span>

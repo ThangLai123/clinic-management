@@ -56,5 +56,6 @@ public class StaffUsers
 
     public Roles Role { get; set; } = null!;
     public ICollection<StaffSessions> Sessions { get; set; } = new List<StaffSessions>();
+    public ICollection<StaffAccessLogs> AccessLogs { get; set; } = new List<StaffAccessLogs>();
 }
 

@@ -566,7 +566,7 @@ export const BillingAndPaymentPage: React.FC = () => {
               <h3 className="font-extrabold text-sm text-slate-900 uppercase">
                 Phòng Khám Chuyên Khoa Tai Mũi Họng
               </h3>
-              <p className="text-[11px] text-slate-500">125 Giải Phóng, Q. Đống Đa, Hà Nội • Hotline: 1900 8899</p>
+              <p className="text-[11px] text-slate-500">33 Đ. Bùi Thế Đạt, Vinh Phú, Nghệ An • Hotline: 1900 8899</p>
               <h4 className="font-bold text-base text-blue-800 pt-2">HÓA ĐƠN THU TIỀN VIỆN PHÍ</h4>
               <p className="text-[11px] font-mono text-slate-400">Mã HĐ: {selectedInvoice.invoiceCode}</p>
             </div>

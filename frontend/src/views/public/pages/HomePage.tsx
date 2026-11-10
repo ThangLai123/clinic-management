@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Calendar,
@@ -8,41 +8,72 @@ import {
   Activity,
   Award,
   Users,
-  AlertTriangle,
   ArrowRight,
   Ear,
   Sparkles,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
+import { getBaseUrl } from '../../../api/client';
+
+interface FeaturedService {
+  id: string;
+  serviceCode: string;
+  serviceName: string;
+  categoryName: string;
+  description: string | null;
+  price: number;
+  durationMin: number | null;
+  durationMax: number | null;
+}
+
+interface ServiceListResponse {
+  items: FeaturedService[];
+}
+
+const FEATURED_SERVICE_CODES = ['DV001', 'DV003', 'DV009', 'DV007'];
+const FEATURED_ICONS = [Stethoscope, Activity, Sparkles, Ear];
 
 export const HomePage: React.FC = () => {
-  const services = [
-    {
-      title: 'Nội Soi Tai Mũi Họng Ống Mềm NBI',
-      desc: 'Công nghệ dải tần ánh sáng hẹp NBI giúp tầm soát ung thư sớm vòm họng, thanh quản, không đau, không kích ứng.',
-      icon: Activity,
-      tag: 'Kỹ thuật cao',
-    },
-    {
-      title: 'Điều Trị Viêm Mũi Xoang & Dị Ứng',
-      desc: 'Phác đồ điều trị viêm xoang cấp, mạn tính, polyp mũi, xịt mũi rửa xoang áp lực dương bằng dung dịch chuẩn.',
-      icon: Sparkles,
-      tag: 'Phổ biến',
-    },
-    {
-      title: 'Bệnh Lý Tai & Đo Thính Lực Đồ',
-      desc: 'Khám viêm tai giữa, thủng màng nhĩ, hút dịch tai, đo sức nghe thính lực đồ và nhĩ lượng chính xác.',
-      icon: Ear,
-      tag: 'Chuyên sâu',
-    },
-    {
-      title: 'Khám Amidan & VA Trẻ Em',
-      desc: 'Chẩn đoán viêm amidan hốc mủ, phì đại VA gây ngủ ngáy, nghẹt mũi ở trẻ nhỏ với phương pháp nhẹ nhàng.',
-      icon: Stethoscope,
-      tag: 'Nhi khoa',
-    },
-  ];
+  const [featuredServices, setFeaturedServices] = useState<FeaturedService[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [servicesError, setServicesError] = useState(false);
+  const [servicesRetry, setServicesRetry] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadFeaturedServices = async () => {
+      setServicesLoading(true);
+      setServicesError(false);
+
+      try {
+        const response = await fetch(`${getBaseUrl()}/api/services?page=1&pageSize=100`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error('Không thể tải dịch vụ');
+
+        const data: ServiceListResponse = await response.json();
+        if (!Array.isArray(data.items)) throw new Error('Dữ liệu dịch vụ không hợp lệ');
+
+        const featured = FEATURED_SERVICE_CODES
+          .map((code) => data.items.find((service) => service.serviceCode === code))
+          .filter((service): service is FeaturedService => service !== undefined);
+
+        setFeaturedServices(featured);
+      } catch {
+        if (!controller.signal.aborted) {
+          setServicesError(true);
+          setFeaturedServices([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) setServicesLoading(false);
+      }
+    };
+
+    void loadFeaturedServices();
+    return () => controller.abort();
+  }, [servicesRetry]);
 
   const doctors = [
     {
@@ -154,19 +185,6 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Emergency Notice Warning */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-start gap-3.5 text-rose-900">
-          <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-          <div className="text-xs space-y-1">
-            <p className="font-bold">Lưu ý an toàn y tế & xử trí trường hợp cấp cứu:</p>
-            <p className="text-rose-700 leading-relaxed">
-              Biểu mẫu đặt lịch trực tuyến chỉ áp dụng cho khám chữa bệnh ngoại trú thông thường. Nếu bạn hoặc người thân xuất hiện các triệu chứng cấp cứu như: <strong>khó thở thanh quản co kéo, hóc dị vật sắc nhọn hoặc pin cúc áo, chảy máu mũi dữ dội không cầm, đau sưng cổ lan nhanh</strong>, vui lòng đến ngay phòng Cấp cứu bệnh viện gần nhất hoặc liên hệ Tổng đài cấp cứu <strong>115</strong>.
-            </p>
-          </div>
-        </div>
-      </section>
-
       {/* Services Grid */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -179,30 +197,74 @@ export const HomePage: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {services.map((item, index) => (
-            <Card key={index} className="hover:border-blue-300 transition-all hover:shadow-md flex flex-col justify-between">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
-                    <item.icon className="h-6 w-6" />
-                  </div>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md">
-                    {item.tag}
-                  </span>
-                </div>
-                <h3 className="font-bold text-slate-900 text-base leading-snug">{item.title}</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">{item.desc}</p>
+        {servicesLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="h-64 rounded-xl border border-slate-200 bg-white p-4 animate-pulse space-y-4">
+                <div className="h-10 w-10 rounded-xl bg-slate-100" />
+                <div className="h-5 w-4/5 rounded bg-slate-100" />
+                <div className="h-14 rounded bg-slate-100" />
+                <div className="h-10 rounded bg-slate-100" />
               </div>
+            ))}
+          </div>
+        ) : servicesError ? (
+          <div className="rounded-xl border border-slate-200 bg-white px-5 py-8 text-center space-y-3">
+            <p className="text-sm text-slate-600">Chưa thể tải các dịch vụ khám. Vui lòng thử lại.</p>
+            <button type="button" onClick={() => setServicesRetry((value) => value + 1)} className="text-sm font-semibold text-blue-700 hover:underline">
+              Thử lại
+            </button>
+          </div>
+        ) : featuredServices.length === 0 ? (
+          <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+            Hiện chưa có dịch vụ tiêu biểu được công khai. Bạn có thể xem toàn bộ danh mục dịch vụ.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {featuredServices.map((service) => {
+              const Icon = FEATURED_ICONS[FEATURED_SERVICE_CODES.indexOf(service.serviceCode)] ?? Stethoscope;
+              const duration = service.durationMin != null && service.durationMax != null
+                ? `${service.durationMin}–${service.durationMax} phút`
+                : service.durationMin != null
+                  ? `${service.durationMin} phút`
+                  : null;
 
-              <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between">
-                <Link to="/appointments/new" className="text-xs font-semibold text-blue-700 hover:text-blue-800 flex items-center gap-1">
-                  Đặt lịch dịch vụ này <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-            </Card>
-          ))}
-        </div>
+              return (
+                <Card
+                  key={service.id}
+                  className="h-full hover:border-blue-300 hover:shadow-md transition-all [&>div]:flex [&>div]:h-full [&>div]:flex-col"
+                >
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600 text-right">
+                        {service.categoryName}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-bold leading-snug text-slate-900">{service.serviceName}</h3>
+                    {service.description && (
+                      <p className="text-xs leading-relaxed text-slate-600">{service.description}</p>
+                    )}
+                    {duration && (
+                      <p className="text-[11px] text-slate-500">Thời gian dự kiến: {duration}</p>
+                    )}
+                  </div>
+
+                  <div className="mt-auto pt-4">
+                    <Link
+                      to={`/appointments/new?serviceCode=${encodeURIComponent(service.serviceCode)}`}
+                      className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs font-semibold text-blue-700 hover:text-blue-800"
+                    >
+                      Đặt lịch dịch vụ này <ArrowRight className="h-4 w-4 shrink-0" />
+                    </Link>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Doctor Team */}

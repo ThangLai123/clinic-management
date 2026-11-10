@@ -13,7 +13,7 @@ export const PublicLayout: React.FC = () => {
               <Clock className="h-3.5 w-3.5 text-teal-400" /> Giờ làm việc: Thứ 2 - Thứ 7: 07:30 - 20:00 | Chủ Nhật: 08:00 - 17:00
             </span>
             <span className="hidden md:flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 text-blue-400" /> 125 Giải Phóng, Q. Đống Đa, Hà Nội
+              <MapPin className="h-3.5 w-3.5 text-blue-400" /> 33 Đ. Bùi Thế Đạt, Vinh Phú, Nghệ An
             </span>
           </div>
           <div className="flex items-center gap-4 text-xs font-medium">
@@ -157,7 +157,7 @@ export const PublicLayout: React.FC = () => {
           <div>
             <h4 className="text-white font-semibold text-sm mb-3">Liên Hệ & Khám Bệnh</h4>
             <div className="space-y-2 text-slate-400">
-              <p>📍 125 Giải Phóng, Q. Đống Đa, TP. Hà Nội</p>
+              <p>📍 33 Đ. Bùi Thế Đạt, Vinh Phú, Nghệ An</p>
               <p>☎️ Hotline cấp cứu & đặt lịch: <strong>1900 8899</strong></p>
               <p>🕒 Thứ 2 - Thứ 7: 07:30 - 20:00</p>
               <p>🕒 Chủ Nhật: 08:00 - 17:00</p>

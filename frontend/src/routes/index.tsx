@@ -35,7 +35,6 @@ import { PrescriptionFormPage } from '../views/doctor/pages/PrescriptionFormPage
 import { AdminDashboardPage } from '../views/admin/pages/AdminDashboardPage';
 import { UserManagementPage } from '../views/admin/pages/UserManagementPage';
 import { AccessHistoryPage } from '../views/admin/pages/AccessHistoryPage';
-import { PermissionsAuditPage } from '../views/admin/pages/PermissionsAuditPage';
 
 // Auth Pages
 import { LoginPage } from '../views/auth/pages/LoginPage';
@@ -95,7 +94,7 @@ export const AppRoutes: React.FC = () => {
         <Route index element={<AdminDashboardPage />} />
         <Route path="users" element={<UserManagementPage />} />
         <Route path="access-history" element={<AccessHistoryPage />} />
-        <Route path="permissions" element={<PermissionsAuditPage />} />
+        <Route path="permissions" element={<Navigate to="/admin" replace />} />
       </Route>
       </Route>
 
